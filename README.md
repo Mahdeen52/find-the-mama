@@ -47,6 +47,32 @@ pnpm dev
 
 Open [http://localhost:3000](http://localhost:3000). Use any valid Bangladeshi mobile number with demo OTP `1234`.
 
+## Team database access
+
+The shared Neon project has two long-lived branches:
+
+- `main` is the production database used by the deployed site.
+- `development` is the team development database. It was created from `main` with the current data and schema and does not auto-delete.
+
+After accepting the Neon project invitation, select the `development` branch in the Neon Console and open **Connect**. Copy the pooled connection string into `DATABASE_URL`, then disable connection pooling and copy the direct connection string into `DIRECT_URL` in your local `.env.local`:
+
+```env
+DATABASE_URL="postgresql://...-pooler..."
+DIRECT_URL="postgresql://..."
+JWT_SECRET="use-a-separate-local-development-secret"
+NEXT_PUBLIC_SITE_URL="http://localhost:3000"
+```
+
+Then start the project:
+
+```bash
+pnpm install
+pnpm prisma generate
+pnpm dev
+```
+
+Use `pnpm db:migrate` only while connected to the `development` branch when creating a schema migration. Commit the generated files under `prisma/migrations/`; production applies committed migrations with `pnpm db:deploy`. Do not commit `.env`, `.env.local`, `.neon`, database URLs, passwords, or API keys. The development branch already contains demo data, so do not run the seed command unless the team intentionally wants to refresh that data.
+
 ## Validation
 
 ```bash
