@@ -5,7 +5,7 @@ generator client {
 datasource db {
   provider  = "postgresql"
   url       = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL")
+  directUrl = env("DATABASE_URL_UNPOOLED")
 }
 
 enum PriceRange {
@@ -28,106 +28,152 @@ enum ReportStatus {
   DISMISSED
 }
 
+enum UserRole {
+  USER
+  MODERATOR
+  ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  BANNED
+}
+
 model User {
-  id                 String        @id @default(cuid())
-  phone              String?       @unique
-  email              String?       @unique
-  name               String?
-  photoUrl           String?
-  languagePref       String        @default("bn")
-  isVerified         Boolean       @default(false)
-  isAdmin            Boolean       @default(false)
-  contributionPoints Int           @default(0)
-  badges             Json          @default("[]")
-  vendors            Vendor[]      @relation("VendorCreator")
-  reviews            Review[]
-  photos             Photo[]
-  reports            Report[]      @relation("Reporter")
-  resolvedReports    Report[]      @relation("ReportResolver")
-  activities         ActivityLog[]
-  createdAt          DateTime      @default(now())
-  updatedAt          DateTime      @updatedAt
+  id                   String        @id @default(cuid())
+  phone                String?       @unique
+  email                String?       @unique
+  name                 String?
+  photoUrl             String?
+  languagePref         String        @default("bn")
+  isVerified           Boolean       @default(false)
+  isAdmin              Boolean       @default(false)
+  role                 UserRole      @default(USER)
+  status               UserStatus    @default(ACTIVE)
+  statusReason         String?
+  trustScore           Int           @default(0)
+  isTrustedContributor Boolean       @default(false)
+  contributionPoints   Int           @default(0)
+  badges               Json          @default("[]")
+  vendors              Vendor[]      @relation("VendorCreator")
+  reviews              Review[]
+  photos               Photo[]
+  reports              Report[]      @relation("Reporter")
+  resolvedReports      Report[]      @relation("ReportResolver")
+  assignedReports      Report[]      @relation("ReportAssignee")
+  claimedVendors       Vendor[]      @relation("VendorClaimant")
+  activities           ActivityLog[]
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
 }
 
 model Vendor {
-  id                String        @id @default(cuid())
-  name              String
-  description       String
-  address           String
-  area              String
-  zone              String
-  lat               Float
-  lng               Float
-  operatingHours    Json
-  phone             String?
-  specialties       Json          @default("[]")
-  priceRange        PriceRange    @default(BUDGET)
-  ratingAvg         Float         @default(0)
-  ratingCount       Int           @default(0)
-  hygieneScore      Float         @default(0)
-  isVerified        Boolean       @default(false)
-  verificationLevel String        @default("community")
-  addedById         String
-  addedBy           User          @relation("VendorCreator", fields: [addedById], references: [id], onDelete: Restrict)
-  status            VendorStatus  @default(ACTIVE)
-  reviews           Review[]
-  photos            Photo[]
-  reports           Report[]
-  createdAt         DateTime      @default(now())
-  updatedAt         DateTime      @updatedAt
+  id                 String       @id @default(cuid())
+  name               String
+  description        String
+  address            String
+  area               String
+  zone               String
+  lat                Float
+  lng                Float
+  operatingHours     Json
+  phone              String?
+  specialties        Json         @default("[]")
+  priceRange         PriceRange   @default(BUDGET)
+  ratingAvg          Float        @default(0)
+  ratingCount        Int          @default(0)
+  hygieneScore       Float        @default(0)
+  isVerified         Boolean      @default(false)
+  verificationLevel  Int          @default(0)
+  verificationNotes  String?
+  claimedByUserId    String?
+  claimedBy          User?        @relation("VendorClaimant", fields: [claimedByUserId], references: [id], onDelete: SetNull)
+  claimedAt          DateTime?
+  weightedRatingAvg  Float        @default(0)
+  trustedReviewCount Int          @default(0)
+  addedById          String
+  addedBy            User         @relation("VendorCreator", fields: [addedById], references: [id], onDelete: Restrict)
+  status             VendorStatus @default(ACTIVE)
+  reviews            Review[]
+  photos             Photo[]
+  reports            Report[]
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
 
   @@index([area, status])
   @@index([lat, lng])
   @@index([ratingAvg])
+  @@index([verificationLevel])
+  @@index([status])
+  @@index([area])
+  @@index([zone])
 }
 
 model Review {
   id                 String   @id @default(cuid())
   vendorId           String
-  vendor              Vendor   @relation(fields: [vendorId], references: [id], onDelete: Cascade)
-  userId              String
-  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  rating              Int
-  comment             String
-  photos              Json     @default("[]")
-  hygieneRating       Int
-  tasteRating         Int
-  valueRating         Int
-  isVerifiedPurchase  Boolean  @default(false)
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
+  vendor             Vendor   @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  userId             String
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  rating             Int
+  comment            String
+  photos             Json     @default("[]")
+  hygieneRating      Int
+  tasteRating        Int
+  valueRating        Int
+  isVerifiedPurchase Boolean  @default(false)
+  isHidden           Boolean  @default(false)
+  isSpam             Boolean  @default(false)
+  moderationReason   String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
   @@unique([vendorId, userId])
   @@index([vendorId, createdAt])
+  @@index([isHidden, isSpam])
 }
 
 model Photo {
-  id        String   @id @default(cuid())
-  vendorId  String
-  vendor    Vendor   @relation(fields: [vendorId], references: [id], onDelete: Cascade)
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  photoUrl  String
-  caption   String?
-  likes     Int      @default(0)
-  isPrimary Boolean  @default(false)
-  createdAt DateTime @default(now())
+  id               String   @id @default(cuid())
+  vendorId         String
+  vendor           Vendor   @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  userId           String
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  photoUrl         String
+  caption          String?
+  likes            Int      @default(0)
+  isPrimary        Boolean  @default(false)
+  isHidden         Boolean  @default(false)
+  isInappropriate  Boolean  @default(false)
+  moderationReason String?
+  createdAt        DateTime @default(now())
 
   @@index([vendorId, createdAt])
+  @@index([isHidden, isInappropriate])
 }
 
 model Report {
-  id           String       @id @default(cuid())
-  vendorId     String
-  vendor       Vendor       @relation(fields: [vendorId], references: [id], onDelete: Cascade)
-  userId       String
-  user         User         @relation("Reporter", fields: [userId], references: [id], onDelete: Cascade)
-  reason       String
-  description  String?
-  status       ReportStatus @default(OPEN)
-  resolvedById String?
-  resolvedBy   User?        @relation("ReportResolver", fields: [resolvedById], references: [id])
-  createdAt    DateTime     @default(now())
+  id             String       @id @default(cuid())
+  vendorId       String?
+  vendor         Vendor?      @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  reviewId       String?
+  photoId        String?
+  entityType     String       @default("VENDOR")
+  priority       Int          @default(0)
+  userId         String
+  user           User         @relation("Reporter", fields: [userId], references: [id], onDelete: Cascade)
+  reason         String
+  description    String?
+  status         ReportStatus @default(OPEN)
+  resolvedById   String?
+  resolvedBy     User?        @relation("ReportResolver", fields: [resolvedById], references: [id])
+  assignedToId   String?
+  assignedTo     User?        @relation("ReportAssignee", fields: [assignedToId], references: [id])
+  resolutionType String?
+  internalNote   String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
 
   @@index([status, createdAt])
 }
@@ -140,7 +186,23 @@ model ActivityLog {
   entityType   String
   entityId     String
   pointsEarned Int      @default(0)
+  reason       String?
+  metadata     Json?
   createdAt    DateTime @default(now())
 
   @@index([entityType, entityId, action, createdAt])
+}
+
+model AdminSettings {
+  id                               String   @id @default("default")
+  trustScoreThresholdForTrusted    Int      @default(50)
+  pointsReviewWithPhoto            Int      @default(10)
+  pointsReviewWithoutPhoto         Int      @default(5)
+  pointsVendorLevel1               Int      @default(20)
+  penaltySpam                      Int      @default(-20)
+  penaltyFakeVendor                Int      @default(-30)
+  trustedReviewWeight              Float    @default(2)
+  regularReviewWeight              Float    @default(1)
+  autoLevel1MinTrustedPhotoReviews Int      @default(3)
+  updatedAt                        DateTime @updatedAt
 }

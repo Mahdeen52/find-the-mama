@@ -4,8 +4,9 @@ import { DEMO_VENDORS } from "../lib/demo-data";
 const prisma = new PrismaClient();
 
 async function main() {
-  const admin = await prisma.user.upsert({ where: { phone: "+8801711000000" }, create: { phone: "+8801711000000", email: "admin@findthemama.bd", name: "Mama Admin", isAdmin: true, isVerified: true, contributionPoints: 250, badges: ["founder", "super-taster"] }, update: { name: "Mama Admin", isAdmin: true, isVerified: true } });
-  const reviewer = await prisma.user.upsert({ where: { phone: "+8801812000000" }, create: { phone: "+8801812000000", email: "foodie@example.com", name: "Dhaka Foodie", isVerified: true, contributionPoints: 85, badges: ["reviewer"] }, update: { name: "Dhaka Foodie", isVerified: true } });
+  const admin = await prisma.user.upsert({ where: { phone: "+8801711000000" }, create: { phone: "+8801711000000", email: "admin@findthemama.bd", name: "Mama Admin", isAdmin: true, role: "ADMIN", isVerified: true, trustScore: 100, isTrustedContributor: true, contributionPoints: 250, badges: ["founder", "super-taster"] }, update: { name: "Mama Admin", isAdmin: true, role: "ADMIN", isVerified: true } });
+  const reviewer = await prisma.user.upsert({ where: { phone: "+8801812000000" }, create: { phone: "+8801812000000", email: "foodie@example.com", name: "Dhaka Foodie", isVerified: true, trustScore: 75, isTrustedContributor: true, contributionPoints: 85, badges: ["reviewer"] }, update: { name: "Dhaka Foodie", isVerified: true } });
+  await prisma.adminSettings.upsert({ where: { id: "default" }, create: {}, update: {} });
 
   for (const item of DEMO_VENDORS) {
     const existing = await prisma.vendor.findFirst({ where: { name: item.name, area: item.area } });

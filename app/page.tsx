@@ -56,7 +56,7 @@ export default function HomePage() {
   const vendors = useQuery({ queryKey: ["vendors", endpoint], queryFn: () => api<Vendor[]>(endpoint), enabled: Boolean(endpoint) });
   const filtered = useMemo(() => {
     const rows = (vendors.data || []).filter((vendor) => !query || `${vendor.name} ${vendor.area} ${vendor.specialties.join(" ")}`.toLowerCase().includes(query.toLowerCase()));
-    return [...rows].sort((a, b) => sort === "distance" ? (a.distance ?? 999) - (b.distance ?? 999) : sort === "rating" ? b.ratingAvg - a.ratingAvg : sort === "area" ? a.area.localeCompare(b.area) || b.ratingAvg - a.ratingAvg : Date.parse(b.createdAt) - Date.parse(a.createdAt));
+    return [...rows].sort((a, b) => sort === "distance" ? (a.distance ?? 999) - (b.distance ?? 999) : sort === "rating" ? (b.weightedRatingAvg ?? b.ratingAvg) - (a.weightedRatingAvg ?? a.ratingAvg) : sort === "area" ? a.area.localeCompare(b.area) || (b.weightedRatingAvg ?? b.ratingAvg) - (a.weightedRatingAvg ?? a.ratingAvg) : Date.parse(b.createdAt) - Date.parse(a.createdAt));
   }, [vendors.data, query, sort]);
   const submit = (event: FormEvent) => { event.preventDefault(); window.location.href = `/search?q=${encodeURIComponent(query)}${area ? `&area=${encodeURIComponent(area)}` : ""}${coords ? `&lat=${coords.lat}&lng=${coords.lng}` : ""}`; };
   const chooseArea = (value: string) => { setArea(value); setCoords(null); setGeoState(value ? "ready" : "denied"); if (sort === "distance") setSort("rating"); };

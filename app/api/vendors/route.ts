@@ -18,14 +18,14 @@ export async function GET(request: Request) {
     const offset = Math.max(Number(params.get("offset")) || 0, 0);
     const minRating = Number(params.get("minRating")) || undefined;
     const q = params.get("q")?.trim(); const area = params.get("area"); const priceRange = params.get("priceRange");
-    const where: Prisma.VendorWhereInput = { status: "ACTIVE", ...(area && { area }), ...(minRating && { ratingAvg: { gte: minRating } }), ...(priceRange && ["BUDGET","MODERATE","PREMIUM"].includes(priceRange) && { priceRange: priceRange as "BUDGET"|"MODERATE"|"PREMIUM" }), ...(q && { OR: [{ name: { contains: q, mode: "insensitive" } }, { description: { contains: q, mode: "insensitive" } }, { area: { contains: q, mode: "insensitive" } }] }) };
+    const where: Prisma.VendorWhereInput = { status: "ACTIVE", ...(area && { area }), ...(minRating && { weightedRatingAvg: { gte: minRating } }), ...(priceRange && ["BUDGET","MODERATE","PREMIUM"].includes(priceRange) && { priceRange: priceRange as "BUDGET"|"MODERATE"|"PREMIUM" }), ...(q && { OR: [{ name: { contains: q, mode: "insensitive" } }, { description: { contains: q, mode: "insensitive" } }, { area: { contains: q, mode: "insensitive" } }] }) };
     const sort = params.get("sort"); const lat = Number(params.get("lat")); const lng = Number(params.get("lng"));
     const hasCoords = params.has("lat") && params.has("lng") && Number.isFinite(lat) && Number.isFinite(lng);
-    const rows = await db.vendor.findMany({ where, include: { photos: { orderBy: [{ isPrimary: "desc" }, { createdAt: "desc" }], take: 3 } }, orderBy: sort === "recentlyAdded" ? { createdAt: "desc" } : { ratingAvg: "desc" } });
+    const rows = await db.vendor.findMany({ where, include: { photos: { where: { isHidden: false }, orderBy: [{ isPrimary: "desc" }, { createdAt: "desc" }], take: 3 } }, orderBy: sort === "recentlyAdded" ? { createdAt: "desc" } : { weightedRatingAvg: "desc" } });
     const specialties = params.get("specialties")?.split(",").filter(Boolean) || [];
     const filtered = rows.filter((row) => (!params.get("openNow") || isOpenNow(row.operatingHours as never)) && (!specialties.length || specialties.every((item) => (row.specialties as string[]).includes(item))));
     const serialized = filtered.map(serializeVendor).map((row) => ({ ...row, ...(hasCoords && { distance: haversineKm(lat, lng, row.lat, row.lng) }) }));
-    serialized.sort((a, b) => sort === "distance" && hasCoords ? (a.distance ?? 999) - (b.distance ?? 999) : sort === "area" ? a.area.localeCompare(b.area) || b.ratingAvg - a.ratingAvg : sort === "recentlyAdded" ? Date.parse(b.createdAt) - Date.parse(a.createdAt) : b.ratingAvg - a.ratingAvg);
+    serialized.sort((a, b) => sort === "distance" && hasCoords ? (a.distance ?? 999) - (b.distance ?? 999) : sort === "area" ? a.area.localeCompare(b.area) || b.weightedRatingAvg - a.weightedRatingAvg : sort === "recentlyAdded" ? Date.parse(b.createdAt) - Date.parse(a.createdAt) : b.weightedRatingAvg - a.weightedRatingAvg);
     return ok(serialized.slice(offset, offset + limit));
   } catch (error) { console.warn("Database unavailable; serving demo vendors", error); return ok(queryDemoVendors(request.url)); }
 }

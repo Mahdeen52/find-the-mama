@@ -10,4 +10,4 @@ export function middleware(request: NextRequest) {
   return NextResponse.next();
 }
 
-export const config = { matcher: ["/vendor/add", "/vendor/:id/edit", "/admin"] };
+export const config = { matcher: ["/vendor/add", "/vendor/:id/edit", "/admin/:path*", "/api/admin/:path*"] };

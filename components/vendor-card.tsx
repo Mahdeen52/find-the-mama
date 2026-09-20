@@ -19,7 +19,7 @@ export function VendorCard({ vendor }: { vendor: Vendor }) {
         {vendor.priceRange && <span className="absolute right-3 top-3 rounded-full bg-ink/80 px-3 py-1 text-xs font-bold text-white">{vendor.priceRange === "BUDGET" ? "৳" : vendor.priceRange === "MODERATE" ? "৳৳" : "৳৳৳"}</span>}
       </div>
       <div className="p-5">
-        <div className="flex items-start justify-between gap-3"><h3 className="text-xl font-black leading-tight">{vendor.name}</h3><span className="flex shrink-0 items-center gap-1 rounded-full bg-amber-50 px-2 py-1 text-sm font-black"><Star size={15} className="fill-amber-400 text-amber-400"/>{vendor.ratingAvg.toFixed(1)}</span></div>
+        <div className="flex items-start justify-between gap-3"><h3 className="text-xl font-black leading-tight">{vendor.name}</h3><span className="flex shrink-0 items-center gap-1 rounded-full bg-amber-50 px-2 py-1 text-sm font-black"><Star size={15} className="fill-amber-400 text-amber-400"/>{(vendor.weightedRatingAvg ?? vendor.ratingAvg).toFixed(1)}</span></div>
         <p className="mt-2 flex items-center gap-1.5 text-sm text-stone-500"><MapPin size={15}/>{vendor.area}{vendor.distance != null && <> · {vendor.distance.toFixed(1)} km</>}</p>
         <div className="mt-4 flex flex-wrap gap-2">{vendor.specialties.slice(0, 2).map((tag) => <span key={tag} className="chip">{tag}</span>)}</div>
         <div className="mt-5 flex items-center justify-between border-t border-orange-100 pt-4 text-sm"><span className="text-stone-500">{vendor.ratingCount} {t("reviews")}</span>{vendor.isVerified && <span className="flex items-center gap-1 font-bold text-leaf"><BadgeCheck size={17}/>{t("verified")}</span>}</div>

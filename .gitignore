@@ -16,3 +16,4 @@ public/uploads/*
 .agents/
 skills-lock.json
 .codex/
+.neon

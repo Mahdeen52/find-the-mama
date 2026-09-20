@@ -37,7 +37,7 @@ On Windows PowerShell:
 Copy-Item .env.example .env.local
 ```
 
-Set `DATABASE_URL`, `DIRECT_URL`, `JWT_SECRET` and `NEXT_PUBLIC_SITE_URL` in `.env.local`, then run:
+Set `DATABASE_URL`, `DATABASE_URL_UNPOOLED`, `JWT_SECRET` and `NEXT_PUBLIC_SITE_URL` in `.env.local`, then run:
 
 ```bash
 pnpm prisma migrate deploy
@@ -59,7 +59,7 @@ pnpm build
 | Variable | Required | Purpose |
 | --- | --- | --- |
 | `DATABASE_URL` | Yes | Pooled PostgreSQL URL used by the application |
-| `DIRECT_URL` | Yes | Direct PostgreSQL URL used by Prisma migrations |
+| `DATABASE_URL_UNPOOLED` | Yes | Direct PostgreSQL URL used by Prisma migrations |
 | `JWT_SECRET` | Yes | Long random secret used to sign sessions |
 | `NEXT_PUBLIC_SITE_URL` | Yes | Canonical site URL |
 | `CLOUDINARY_CLOUD_NAME` | Optional | Cloudinary cloud name for persistent uploads |

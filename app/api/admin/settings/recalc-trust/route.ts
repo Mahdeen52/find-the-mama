@@ -1,0 +1,2 @@
+import { logAdminAction, recalcAllTrustScores } from "@/lib/admin"; import { requireAdmin } from "@/lib/auth"; import { db } from "@/lib/db"; import { handleApiError, ok } from "@/lib/http";
+export async function POST() { try { const actor = await requireAdmin(); const count = await recalcAllTrustScores(); await logAdminAction(db, { actorId: actor.id, action: "trust_scores_recalculated", entityType: "settings", entityId: "default", metadata: { count } }); return ok({ count }); } catch (error) { return handleApiError(error); } }
