@@ -1,0 +1,146 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum PriceRange {
+  BUDGET
+  MODERATE
+  PREMIUM
+}
+
+enum VendorStatus {
+  PENDING
+  ACTIVE
+  REJECTED
+  CLOSED
+}
+
+enum ReportStatus {
+  OPEN
+  REVIEWING
+  RESOLVED
+  DISMISSED
+}
+
+model User {
+  id                 String        @id @default(cuid())
+  phone              String?       @unique
+  email              String?       @unique
+  name               String?
+  photoUrl           String?
+  languagePref       String        @default("bn")
+  isVerified         Boolean       @default(false)
+  isAdmin            Boolean       @default(false)
+  contributionPoints Int           @default(0)
+  badges             Json          @default("[]")
+  vendors            Vendor[]      @relation("VendorCreator")
+  reviews            Review[]
+  photos             Photo[]
+  reports            Report[]      @relation("Reporter")
+  resolvedReports    Report[]      @relation("ReportResolver")
+  activities         ActivityLog[]
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+}
+
+model Vendor {
+  id                String        @id @default(cuid())
+  name              String
+  description       String
+  address           String
+  area              String
+  zone              String
+  lat               Float
+  lng               Float
+  operatingHours    Json
+  phone             String?
+  specialties       Json          @default("[]")
+  priceRange        PriceRange    @default(BUDGET)
+  ratingAvg         Float         @default(0)
+  ratingCount       Int           @default(0)
+  hygieneScore      Float         @default(0)
+  isVerified        Boolean       @default(false)
+  verificationLevel String        @default("community")
+  addedById         String
+  addedBy           User          @relation("VendorCreator", fields: [addedById], references: [id], onDelete: Restrict)
+  status            VendorStatus  @default(ACTIVE)
+  reviews           Review[]
+  photos            Photo[]
+  reports           Report[]
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  @@index([area, status])
+  @@index([lat, lng])
+  @@index([ratingAvg])
+}
+
+model Review {
+  id                 String   @id @default(cuid())
+  vendorId           String
+  vendor              Vendor   @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  userId              String
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  rating              Int
+  comment             String
+  photos              Json     @default("[]")
+  hygieneRating       Int
+  tasteRating         Int
+  valueRating         Int
+  isVerifiedPurchase  Boolean  @default(false)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@unique([vendorId, userId])
+  @@index([vendorId, createdAt])
+}
+
+model Photo {
+  id        String   @id @default(cuid())
+  vendorId  String
+  vendor    Vendor   @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  photoUrl  String
+  caption   String?
+  likes     Int      @default(0)
+  isPrimary Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([vendorId, createdAt])
+}
+
+model Report {
+  id           String       @id @default(cuid())
+  vendorId     String
+  vendor       Vendor       @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  userId       String
+  user         User         @relation("Reporter", fields: [userId], references: [id], onDelete: Cascade)
+  reason       String
+  description  String?
+  status       ReportStatus @default(OPEN)
+  resolvedById String?
+  resolvedBy   User?        @relation("ReportResolver", fields: [resolvedById], references: [id])
+  createdAt    DateTime     @default(now())
+
+  @@index([status, createdAt])
+}
+
+model ActivityLog {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  action       String
+  entityType   String
+  entityId     String
+  pointsEarned Int      @default(0)
+  createdAt    DateTime @default(now())
+
+  @@index([entityType, entityId, action, createdAt])
+}

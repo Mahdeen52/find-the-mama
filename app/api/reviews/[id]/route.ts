@@ -1,0 +1,7 @@
+import { requireAuth } from "@/lib/auth";
+import { db } from "@/lib/db";
+import { fail, handleApiError, ok } from "@/lib/http";
+import { reviewSchema } from "@/lib/validations";
+import { recalculateVendor } from "@/lib/vendor";
+export async function PUT(request: Request, { params }: { params: { id: string } }) { try { const user = await requireAuth(); const current = await db.review.findUnique({ where: { id: params.id } }); if (!current) return fail("Review not found", 404); if (current.userId !== user.id && !user.isAdmin) return fail("Forbidden", 403); const parsed = reviewSchema.safeParse(await request.json()); if (!parsed.success) return fail(parsed.error.issues[0]?.message || "Invalid review", 422); const row = await db.review.update({ where: { id: params.id }, data: { ...parsed.data, photos: parsed.data.photos } }); await recalculateVendor(db, row.vendorId); return ok({ ...row, photos: row.photos as string[] }); } catch (error) { return handleApiError(error); } }
+export async function DELETE(_: Request, { params }: { params: { id: string } }) { try { const user = await requireAuth(); const current = await db.review.findUnique({ where: { id: params.id } }); if (!current) return fail("Review not found", 404); if (current.userId !== user.id && !user.isAdmin) return fail("Forbidden", 403); await db.review.delete({ where: { id: params.id } }); await recalculateVendor(db, current.vendorId); return ok({ deleted: true }); } catch (error) { return handleApiError(error); } }

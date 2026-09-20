@@ -1,0 +1,25 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+@import "leaflet/dist/leaflet.css";
+
+:root { color-scheme: light; }
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body { margin: 0; background: #fffaf1; color: #211711; font-family: Arial, "Noto Sans Bengali", sans-serif; }
+button, input, select, textarea { font: inherit; }
+button, a { -webkit-tap-highlight-color: transparent; }
+::selection { background: #fed7aa; }
+
+@layer components {
+  .container-page { @apply mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8; }
+  .btn-primary { @apply inline-flex min-h-11 items-center justify-center gap-2 rounded-full bg-saffron-600 px-5 py-2.5 font-bold text-white shadow-sm transition hover:bg-saffron-700 focus:outline-none focus:ring-4 focus:ring-orange-200 disabled:cursor-not-allowed disabled:opacity-50; }
+  .btn-secondary { @apply inline-flex min-h-11 items-center justify-center gap-2 rounded-full border border-orange-200 bg-white px-5 py-2.5 font-bold text-ink transition hover:bg-saffron-50 focus:outline-none focus:ring-4 focus:ring-orange-100; }
+  .card { @apply rounded-3xl border border-orange-100 bg-white shadow-warm; }
+  .field { @apply min-h-12 w-full rounded-2xl border border-orange-200 bg-white px-4 py-3 outline-none transition placeholder:text-stone-400 focus:border-saffron-500 focus:ring-4 focus:ring-orange-100; }
+  .label { @apply mb-2 block text-sm font-bold text-stone-700; }
+  .chip { @apply inline-flex items-center rounded-full bg-orange-50 px-3 py-1.5 text-sm font-semibold text-saffron-700; }
+}
+
+.leaflet-container { z-index: 0; font-family: inherit; }
+.leaflet-popup-content-wrapper { border-radius: 18px; }
