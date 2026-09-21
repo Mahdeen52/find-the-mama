@@ -94,7 +94,7 @@ const generated = rows.map((item, index): DemoVendor => ({
   phone: `+88017${String(10000000 + index).slice(-8)}`,
   specialties: item.specialties, operatingHours: hoursFor(index), priceRange: item.price || "BUDGET",
   ratingAvg: item.rating, ratingCount: item.count, hygieneScore: Math.max(3.8, item.rating - 0.2),
-  isVerified: true, verificationLevel: item.rating >= 4.7 ? "trusted" : "community", status: "ACTIVE",
+  isVerified: true, verificationLevel: item.rating >= 4.7 ? 2 : 1, status: "ACTIVE",
   createdAt: new Date(Date.UTC(2026, 7, 1 + index)).toISOString(), reviews: [],
   photos: photo(item.id, index)
 }));
@@ -106,7 +106,7 @@ const fuchkaClub: DemoVendor = {
   phone: "+8801700000000", specialties: ["Dahi Fuchka", "Spicy Fuchka", "Chatpati"],
   operatingHours: Object.fromEntries(days.map((day) => [day, { open: "16:00", close: "04:00", closed: false }])),
   priceRange: "MODERATE", ratingAvg: 4.9, ratingCount: 128, hygieneScore: 4.8, isVerified: true,
-  verificationLevel: "featured", status: "ACTIVE", createdAt: "2026-09-01T12:00:00.000Z", reviews: [],
+  verificationLevel: 3, status: "ACTIVE", createdAt: "2026-09-01T12:00:00.000Z", reviews: [],
   photos: [{ id: "photo-club", photoUrl: "/seed/fuchka-stall-gulshan.png", caption: "Demo photo of a modern Gulshan fuchka stall", isPrimary: true }]
 };
 

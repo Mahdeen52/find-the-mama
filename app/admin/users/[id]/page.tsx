@@ -1,0 +1,29 @@
+"use client";
+
+import Link from "next/link";
+import { useParams } from "next/navigation";
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import toast from "react-hot-toast";
+import { AdminDialog } from "@/components/admin/admin-dialog";
+import { StatusBadge, TrustBadge } from "@/components/admin/badges";
+import { api } from "@/lib/api";
+
+type Pending = "trust" | "role" | "suspend" | "ban" | null;
+export default function UserDetailPage() {
+  const { id } = useParams<{ id: string }>(); const [pending, setPending] = useState<Pending>(null);
+  const query = useQuery({ queryKey: ["admin-user", id], queryFn: () => api<any>(`/api/admin/users/${id}`) }); const user = query.data;
+  const post = async (path: string, body: unknown) => { try { await api(`/api/admin/users/${id}/${path}`, { method: "POST", body: JSON.stringify(body) }); toast.success("User updated"); await query.refetch(); } catch (error) { toast.error(error instanceof Error ? error.message : "Action failed"); throw error; } };
+  const submit = async (values: Record<string, string>) => { if (pending === "trust") await post("trust", { delta: Number(values.delta), reason: values.reason }); if (pending === "role") await post("role", { role: values.role, reason: values.reason }); if (pending === "suspend") await post("ban", { status: "SUSPENDED", reason: values.reason }); if (pending === "ban") await post("ban", { status: "BANNED", reason: values.reason }); };
+  if (!user) return <div className="card p-10">Loading user…</div>;
+  return <div><div className="flex flex-wrap items-start justify-between gap-4"><div><h1 className="text-4xl font-black">{user.name || "Unnamed user"}</h1><p className="mt-2 text-stone-600">{user.phone || "No phone"} · {user.email || "No email"}</p></div><div className="flex gap-2"><TrustBadge trusted={user.isTrustedContributor} score={user.trustScore}/><StatusBadge value={user.status}/></div></div>
+    <div className="mt-6 grid gap-6 xl:grid-cols-2"><section className="card p-5"><h2 className="text-xl font-black">Trust & activity</h2><div className="mt-4 grid grid-cols-3 gap-3 text-center">{[[user._count.reviews,"Reviews"],[user._count.photos,"Photos"],[user._count.vendors,"Vendors"]].map(([value,label]) => <div className="rounded-2xl bg-orange-50 p-3" key={label}><b className="text-2xl">{value}</b><p className="text-xs">{label}</p></div>)}</div><div className="mt-4 flex flex-wrap gap-2"><button className="btn-secondary !min-h-9 !px-3" onClick={() => setPending("trust")}>Adjust score</button><button className="btn-secondary !min-h-9 !px-3" onClick={() => void post("trust", { isTrustedContributor: !user.isTrustedContributor, reason: "Manual trusted contributor override" })}>{user.isTrustedContributor ? "Unmark trusted" : "Mark trusted"}</button></div></section>
+      <section className="card p-5"><h2 className="text-xl font-black">Access & safety</h2><p className="mt-3">Current role: <b>{user.role}</b></p><div className="mt-4"><button className="btn-secondary !min-h-9 !px-3" onClick={() => setPending("role")}>Change role</button></div><div className="mt-4 flex gap-2"><button className="btn-secondary !min-h-9 !px-3" onClick={() => void post("ban", { status: "ACTIVE", reason: "Account restored" })}>Activate</button><button className="btn-secondary !min-h-9 !px-3" onClick={() => setPending("suspend")}>Suspend</button><button className="btn-secondary !min-h-9 !px-3 text-red-700" onClick={() => setPending("ban")}>Ban</button></div></section></div>
+    <section className="card mt-6 p-5"><h2 className="text-xl font-black">Contributed vendors</h2><div className="mt-3 divide-y">{user.vendors.map((vendor: any) => <div className="flex justify-between py-3" key={vendor.id}><Link className="font-bold text-saffron-700" href={`/admin/vendors/${vendor.id}`}>{vendor.name}</Link><span>L{vendor.verificationLevel} · {vendor.status}</span></div>)}</div></section>
+    <section className="card mt-6 p-5"><h2 className="text-xl font-black">Recent trust history</h2>{user.activities.map((activity: any) => <div className="border-b py-3 text-sm" key={activity.id}><b>{activity.action.replaceAll("_", " ")}</b> · {activity.pointsEarned > 0 ? "+" : ""}{activity.pointsEarned}<p className="text-stone-500">{activity.reason || "No reason"} · {new Date(activity.createdAt).toLocaleString()}</p></div>)}</section>
+    <AdminDialog open={pending === "trust"} title="Adjust trust score" description={`Current score: ${user.trustScore}`} confirmLabel="Adjust score" onClose={() => setPending(null)} onSubmit={submit} fields={[{ name: "delta", label: "Score change", type: "number", defaultValue: "10", required: true }, { name: "reason", label: "Reason", type: "textarea", required: true }]}/>
+    <AdminDialog open={pending === "role"} title="Change user role" description="Only administrators can grant or remove staff access." confirmLabel="Change role" onClose={() => setPending(null)} onSubmit={submit} fields={[{ name: "role", label: "Role", type: "select", defaultValue: user.role, options: ["USER","MODERATOR","ADMIN"].map((role) => ({ label: role, value: role })) }, { name: "reason", label: "Reason", type: "textarea", required: true }]}/>
+    <AdminDialog open={pending === "suspend"} title="Suspend user?" description="The user will be unable to authenticate until reactivated." confirmLabel="Suspend user" danger onClose={() => setPending(null)} onSubmit={submit} fields={[{ name: "reason", label: "Reason", type: "textarea", required: true }]}/>
+    <AdminDialog open={pending === "ban"} title="Ban user?" description="The account will be disabled and the action will be recorded." confirmLabel="Ban user" danger onClose={() => setPending(null)} onSubmit={submit} fields={[{ name: "reason", label: "Reason", type: "textarea", required: true }]}/>
+  </div>;
+}

@@ -1,0 +1,2 @@
+import { computeWeightedRating, logAdminAction } from "@/lib/admin"; import { requireAdmin } from "@/lib/auth"; import { db } from "@/lib/db"; import { handleApiError, ok } from "@/lib/http";
+export async function POST(_: Request, { params }: { params: { id: string } }) { try { const actor = await requireAdmin(); const result = await computeWeightedRating(params.id); await logAdminAction(db, { actorId: actor.id, action: "vendor_rating_recomputed", entityType: "vendor", entityId: params.id }); return ok(result); } catch (error) { return handleApiError(error); } }

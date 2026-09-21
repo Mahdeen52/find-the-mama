@@ -10,6 +10,10 @@ export type User = {
   contributionPoints: number;
   badges: string[];
   isAdmin?: boolean;
+  role?: "USER" | "MODERATOR" | "ADMIN";
+  trustScore?: number;
+  isTrustedContributor?: boolean;
+  status?: "ACTIVE" | "SUSPENDED" | "BANNED";
 };
 
 export type ProfileStats = {
@@ -51,7 +55,9 @@ export type Vendor = {
   ratingCount: number;
   hygieneScore: number;
   isVerified: boolean;
-  verificationLevel: string;
+  verificationLevel: number;
+  weightedRatingAvg?: number;
+  trustedReviewCount?: number;
   status: string;
   createdAt: string;
   distance?: number;

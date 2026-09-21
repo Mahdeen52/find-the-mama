@@ -23,6 +23,13 @@ export async function getSession() {
 export async function requireAuth() {
   const user = await getSession();
   if (!user) throw new Error("UNAUTHORIZED");
+  if (user.status !== "ACTIVE") throw new Error("ACCOUNT_DISABLED");
+  return user;
+}
+
+export async function requireAdmin() {
+  const user = await requireAuth();
+  if (user.role !== "ADMIN" && user.role !== "MODERATOR") throw new Error("FORBIDDEN");
   return user;
 }
 
@@ -30,5 +37,9 @@ export const publicUser = (user: NonNullable<Awaited<ReturnType<typeof getSessio
   id: user.id, phone: user.phone, email: user.email, name: user.name, photoUrl: user.photoUrl,
   languagePref: user.languagePref, contributionPoints: user.contributionPoints,
   badges: Array.isArray(user.badges) ? user.badges.filter((badge): badge is string => typeof badge === "string") : [],
-  isAdmin: user.isAdmin || Boolean(user.email?.toLowerCase().includes("admin"))
+  role: user.role,
+  isAdmin: user.role === "ADMIN" || user.role === "MODERATOR",
+  trustScore: user.trustScore,
+  isTrustedContributor: user.isTrustedContributor,
+  status: user.status
 });

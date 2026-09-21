@@ -21,7 +21,7 @@ export function VendorMap({ vendors, className = "h-[460px]", picker, position, 
       <TileLayer attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
       {picker && onPositionChange && <MapClick onChange={onPositionChange}/>} 
       {picker && position && <Marker position={position} icon={pickerPin}/>} 
-      {vendors?.map((vendor) => <Marker key={vendor.id} position={[vendor.lat, vendor.lng]} icon={pin}><Popup><div className="min-w-44"><strong className="text-base">{vendor.name}</strong><p className="my-1 text-sm">{vendor.area} · ★ {vendor.ratingAvg.toFixed(1)}</p><Link className="font-bold text-orange-700" href={`/vendor/${vendor.id}`}>View mama →</Link></div></Popup></Marker>)}
+      {vendors?.map((vendor) => <Marker key={vendor.id} position={[vendor.lat, vendor.lng]} icon={pin}><Popup><div className="min-w-44"><strong className="text-base">{vendor.name}</strong><p className="my-1 text-sm">{vendor.area} · ★ {(vendor.weightedRatingAvg ?? vendor.ratingAvg).toFixed(1)}</p><Link className="font-bold text-orange-700" href={`/vendor/${vendor.id}`}>View mama →</Link></div></Popup></Marker>)}
     </MapContainer>
   );
 }
