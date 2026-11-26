@@ -1,42 +1,106 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { Award, Camera, ChevronRight, MapPinned, MessageSquareText, Sparkles, Star, Trophy } from "lucide-react";
+import { Award, Camera, MapPin, MessageSquareText, UserRound } from "lucide-react";
 import Link from "next/link";
+import { useFormatter, useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { useAuth } from "@/components/auth-provider";
+import { ContributionLinks } from "@/components/contribution-links";
+import { RewardBadges } from "@/components/reward-badges";
+import { SectionHeader, Skeleton, StatePanel } from "@/components/ui";
+import { VendorPhoto } from "@/components/vendor-photo";
 import { api } from "@/lib/api";
-import { BADGE_LEVELS, POINT_RULES } from "@/lib/gamification";
+import { BADGE_LEVELS } from "@/lib/gamification";
 import type { ProfileStats } from "@/lib/types";
 
-const actionLabels: Record<string, string> = { add_vendor: "Listed a mama", add_review: "Shared a review", add_photo: "Added a photo", on_my_way: "Marked on the way" };
+const metrics = [
+  { key: "vendors", label: "listings", icon: MapPin },
+  { key: "reviews", label: "reviews", icon: MessageSquareText },
+  { key: "photos", label: "photos", icon: Camera }
+] as const;
 
 export default function ProfilePage() {
   const router = useRouter();
+  const t = useTranslations("Profile");
+  const common = useTranslations("Common");
+  const home = useTranslations("Home");
+  const format = useFormatter();
   const { user, loading } = useAuth();
-  useEffect(() => { if (!loading && !user) router.replace("/auth/login"); }, [loading, user, router]);
-  const stats = useQuery({ queryKey: ["profile-stats"], queryFn: () => api<ProfileStats>("/api/users/me/stats"), enabled: Boolean(user) });
+  useEffect(() => { if (!loading && !user) router.replace("/auth/login?next=/profile"); }, [loading, user, router]);
+  const stats = useQuery({ queryKey: ["profile-stats", user?.id], queryFn: () => api<ProfileStats>("/api/users/me/stats"), enabled: Boolean(user) });
 
-  if (loading || !user || stats.isLoading) return <div className="container-page py-16"><div className="h-96 animate-pulse rounded-[2rem] bg-orange-100"/></div>;
+  if (loading || !user) return <div className="page-section"><Skeleton className="h-80" label={common("loading")} /></div>;
+
   const data = stats.data;
+  const points = data?.points ?? user.contributionPoints;
   const next = data?.nextBadge;
-  const previousTarget = [...BADGE_LEVELS].reverse().find((badge) => badge.points <= user.contributionPoints)?.points || 0;
-  const progress = next ? Math.min(100, ((user.contributionPoints - previousTarget) / (next.points - previousTarget)) * 100) : 100;
+  const nextBadge = BADGE_LEVELS.find((badge) => badge.id === next?.id);
+  const previousTarget = BADGE_LEVELS.reduce((target, badge) => points >= badge.points ? badge.points : target, 0);
 
-  return <div className="container-page py-10 sm:py-16">
-    <section className="overflow-hidden rounded-[2.25rem] bg-ink text-white shadow-warm">
-      <div className="grid gap-8 p-7 sm:p-10 lg:grid-cols-[1.2fr_.8fr] lg:p-12">
-        <div><div className="mb-5 inline-flex items-center gap-2 rounded-full bg-white/10 px-4 py-2 text-sm font-bold text-orange-200"><Sparkles size={16}/>Community profile</div><h1 className="text-4xl font-black sm:text-5xl">{user.name || "Fuchka Explorer"}</h1><p className="mt-3 text-stone-300">{user.phone || user.email}</p><div className="mt-8 flex items-end gap-3"><strong className="text-6xl font-black text-orange-300">{user.contributionPoints}</strong><span className="pb-2 text-lg font-bold">community points</span></div>{next ? <div className="mt-6 max-w-xl"><div className="mb-2 flex justify-between text-sm"><span>Next: {next.name}</span><span>{next.remaining} pts to go</span></div><div className="h-3 overflow-hidden rounded-full bg-white/10"><div className="h-full rounded-full bg-saffron-500 transition-all" style={{ width: `${progress}%` }}/></div></div> : <p className="mt-5 font-bold text-orange-200">You unlocked every badge. Dhaka legend!</p>}</div>
-        <div className="grid grid-cols-3 gap-3 self-end">{[{ icon: MapPinned, value: data?.counts.vendors || 0, label: "Listings" }, { icon: MessageSquareText, value: data?.counts.reviews || 0, label: "Reviews" }, { icon: Camera, value: data?.counts.photos || 0, label: "Photos" }].map(({ icon: Icon, value, label }) => <div key={label} className="rounded-3xl bg-white/10 p-4 text-center"><Icon className="mx-auto text-orange-300"/><strong className="mt-3 block text-2xl">{value}</strong><span className="text-xs text-stone-300">{label}</span></div>)}</div>
+  return (
+    <div className="page-section">
+      <SectionHeader page title={t("title")} description={t("description")} action={<Link className="btn-secondary" href="/rewards"><Award size={17} aria-hidden="true" />{common("rewards")}</Link>} />
+      <div className="mt-6 grid gap-4 md:grid-cols-2">
+        <section className="card flex items-center gap-4 p-4 sm:p-6">
+          <div className="relative grid h-14 w-14 shrink-0 place-items-center overflow-hidden rounded-full bg-brand-50 text-brand-700">
+            {user.photoUrl ? <VendorPhoto src={user.photoUrl} alt="" sizes="56px" /> : <UserRound size={25} aria-hidden="true" />}
+          </div>
+          <div className="min-w-0"><h2 className="card-title break-words">{user.name || t("guestName")}</h2><p className="break-words text-sm text-muted">{user.phone || user.email}</p></div>
+        </section>
+        <section className="card p-4 sm:p-6">
+          <h2 className="card-title text-brand-700">{common("points", { count: points })}</h2>
+          {next && nextBadge ? (
+            <div className="mt-3">
+              <div className="mb-2 flex flex-wrap justify-between gap-1 text-sm text-muted">
+                <span>{t("next", { name: t(nextBadge.id) })}</span><span>{t("remaining", { count: next.remaining })}</span>
+              </div>
+              <progress className="h-2 w-full overflow-hidden rounded-full bg-surface [&::-moz-progress-bar]:bg-brand-600 [&::-webkit-progress-bar]:bg-surface [&::-webkit-progress-value]:bg-brand-600"
+                value={Math.max(0, points - previousTarget)} max={Math.max(1, next.points - previousTarget)} aria-label={t("next", { name: t(nextBadge.id) })}
+              />
+            </div>
+          ) : data && <p className="mt-2 text-sm text-muted">{t("allEarned")}</p>}
+        </section>
       </div>
-    </section>
-
-    <div className="mt-8 grid gap-8 lg:grid-cols-[1.1fr_.9fr]">
-      <section className="card p-6 sm:p-8"><div className="flex items-center gap-3"><Award className="text-saffron-600"/><div><h2 className="text-2xl font-black">Your badges</h2><p className="text-sm text-stone-500">Every useful contribution moves you forward.</p></div></div><div className="mt-6 grid gap-3 sm:grid-cols-2">{BADGE_LEVELS.map((badge) => { const earned = user.badges.includes(badge.id) || user.contributionPoints >= badge.points; return <div key={badge.id} className={`rounded-3xl border p-5 ${earned ? "border-orange-200 bg-orange-50" : "border-stone-200 bg-stone-50 opacity-60"}`}><div className={`grid h-11 w-11 place-items-center rounded-2xl ${earned ? "bg-saffron-600 text-white" : "bg-stone-200 text-stone-500"}`}>{badge.id === "dhaka-legend" ? <Trophy/> : <Star/>}</div><h3 className="mt-4 font-black">{badge.name}</h3><p className="mt-1 text-sm text-stone-600">{badge.description}</p><p className="mt-3 text-xs font-bold uppercase tracking-wider text-saffron-700">{badge.points} points</p></div>; })}</div></section>
-      <section className="space-y-8"><div className="card p-6 sm:p-8"><h2 className="text-2xl font-black">Earn more points</h2><div className="mt-5 space-y-3">{[{ label: "List a new mama", points: POINT_RULES.add_vendor, href: "/vendor/add" }, { label: "Write your first review", points: POINT_RULES.add_review, href: "/search" }, { label: "Add a useful photo", points: POINT_RULES.add_photo, href: "/search" }].map((item) => <Link key={item.label} href={item.href} className="flex items-center justify-between rounded-2xl border border-orange-100 p-4 transition hover:border-orange-300 hover:bg-orange-50"><span className="font-bold">{item.label}</span><span className="flex items-center gap-2 font-black text-leaf">+{item.points}<ChevronRight size={16}/></span></Link>)}</div></div>
-        <div className="card p-6 sm:p-8"><h2 className="text-2xl font-black">Recent activity</h2><div className="mt-5 space-y-4">{!data?.recentActivity.length ? <p className="rounded-2xl bg-orange-50 p-4 text-sm text-stone-600">Your contributions will appear here. Start by adding a neighbourhood mama.</p> : data.recentActivity.map((item) => <div key={item.id} className="flex items-center justify-between gap-4 border-b border-orange-100 pb-4 last:border-0 last:pb-0"><div><p className="font-bold">{actionLabels[item.action] || item.action}</p><p className="text-xs text-stone-500">{new Date(item.createdAt).toLocaleDateString("en-BD", { dateStyle: "medium" })}</p></div><span className="rounded-full bg-emerald-50 px-3 py-1 text-sm font-black text-leaf">+{item.pointsEarned}</span></div>)}</div></div>
-      </section>
+      {stats.isError ? (
+        <div className="mt-4"><StatePanel title={common("errorTitle")} description={common("error")} error action={<button type="button" onClick={() => void stats.refetch()} className="btn-primary">{common("retry")}</button>} /></div>
+      ) : (
+        <dl className="mt-4 grid grid-cols-3 gap-2 sm:gap-4">
+          {metrics.map(({ key, label, icon: Icon }) => (
+            <div className="card p-3 sm:p-4" key={key}>
+              <dt className="flex flex-wrap items-center gap-1.5 break-words text-xs font-semibold text-muted sm:text-sm"><Icon size={16} aria-hidden="true" />{t(label)}</dt>
+              <dd className="mt-2 text-xl font-bold tabular-nums sm:text-2xl">{data ? format.number(data.counts[key]) : "—"}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
+      <div className="mt-8 grid gap-8 lg:grid-cols-2">
+        <section>
+          <h2 className="section-title mb-4">{t("badges")}</h2>
+          <RewardBadges points={points} badges={data?.badges ?? user.badges} />
+          <h2 className="section-title mb-4 mt-8">{home("contribute")}</h2>
+          <ContributionLinks />
+        </section>
+        <section>
+          <h2 className="section-title mb-4">{t("activity")}</h2>
+          {stats.isPending && <Skeleton className="h-40" label={common("loading")} />}
+          {data && !data.recentActivity.length && <p className="card p-4 text-sm text-muted">{t("empty")}</p>}
+          {!!data?.recentActivity.length && (
+            <ol className="card divide-y divide-line">
+              {data.recentActivity.map((item) => (
+                <li key={item.id} className="flex flex-wrap items-center justify-between gap-2 p-4">
+                  <div>
+                    <p className="font-semibold">{t.has(item.action) ? t(item.action) : item.action.replaceAll("_", " ")}</p>
+                    <time dateTime={item.createdAt} className="text-sm text-muted">{format.dateTime(new Date(item.createdAt), { dateStyle: "medium" })}</time>
+                  </div>
+                  {!!item.pointsEarned && <span className="chip chip-brand">{item.pointsEarned > 0 ? "+" : ""}{common("points", { count: item.pointsEarned })}</span>}
+                </li>
+              ))}
+            </ol>
+          )}
+        </section>
+      </div>
     </div>
-  </div>;
+  );
 }

@@ -10,7 +10,7 @@ const AuthContext = createContext<{ user: User | null; loading: boolean; refresh
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const queryClient = useQueryClient();
   const query = useQuery({ queryKey: ["me"], queryFn: () => api<User | null>("/api/users/me"), retry: false });
-  return <AuthContext.Provider value={{ user: query.data ?? null, loading: query.isLoading, refresh: () => queryClient.invalidateQueries({ queryKey: ["me"] }), setUser: (user) => queryClient.setQueryData(["me"], user) }}>{children}</AuthContext.Provider>;
+  return <AuthContext.Provider value={{ user: query.data ?? null, loading: query.isLoading, refresh: () => Promise.all([queryClient.invalidateQueries({ queryKey: ["me"] }), queryClient.invalidateQueries({ queryKey: ["profile-stats"] })]), setUser: (user) => queryClient.setQueryData(["me"], user) }}>{children}</AuthContext.Provider>;
 }
 
 export const useAuth = () => useContext(AuthContext);

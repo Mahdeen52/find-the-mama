@@ -114,13 +114,13 @@ export const DEMO_VENDORS: DemoVendor[] = [fuchkaClub, ...generated];
 
 export function queryDemoVendors(url: string) {
   const params = new URL(url).searchParams;
-  const area = params.get("area"); const q = params.get("q")?.toLowerCase();
+  const area = params.get("area"); const q = params.get("q")?.trim().toLowerCase();
   const minRating = Number(params.get("minRating")) || 0; const price = params.get("priceRange");
   const specialties = params.get("specialties")?.split(",").filter(Boolean) || [];
   const lat = Number(params.get("lat")); const lng = Number(params.get("lng"));
   const hasCoords = Number.isFinite(lat) && Number.isFinite(lng) && params.has("lat") && params.has("lng");
   const sort = params.get("sort") || "rating"; const limit = Math.min(Number(params.get("limit")) || 20, 50); const offset = Number(params.get("offset")) || 0;
-  const result: Vendor[] = DEMO_VENDORS.filter((vendor) => (!area || vendor.area === area) && vendor.ratingAvg >= minRating && (!price || vendor.priceRange === price) && (!q || `${vendor.name} ${vendor.area} ${vendor.specialties.join(" ")}`.toLowerCase().includes(q)) && (!specialties.length || specialties.every((item) => vendor.specialties.includes(item))) && (!params.get("openNow") || isOpenNow(vendor.operatingHours))).map((vendor) => ({ ...vendor, ...(hasCoords && { distance: haversineKm(lat, lng, vendor.lat, vendor.lng) }) }));
+  const result: Vendor[] = DEMO_VENDORS.filter((vendor) => (!area || vendor.area === area) && vendor.ratingAvg >= minRating && (!price || vendor.priceRange === price) && (!q || `${vendor.name} ${vendor.area} ${vendor.description} ${vendor.specialties.join(" ")}`.toLowerCase().includes(q)) && (!specialties.length || specialties.every((item) => vendor.specialties.includes(item))) && (!params.get("openNow") || isOpenNow(vendor.operatingHours))).map((vendor) => ({ ...vendor, ...(hasCoords && { distance: haversineKm(lat, lng, vendor.lat, vendor.lng) }) }));
   result.sort((a, b) => sort === "distance" && hasCoords ? (a.distance ?? 999) - (b.distance ?? 999) : sort === "recentlyAdded" ? Date.parse(b.createdAt) - Date.parse(a.createdAt) : sort === "area" ? a.area.localeCompare(b.area) || b.ratingAvg - a.ratingAvg : b.ratingAvg - a.ratingAvg);
   return result.slice(offset, offset + limit);
 }

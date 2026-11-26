@@ -1,5 +1,5 @@
 import { clsx, type ClassValue } from "clsx";
-import type { Hours } from "@/lib/types";
+import type { Hours, Vendor } from "@/lib/types";
 
 export function cn(...inputs: ClassValue[]) { return clsx(inputs); }
 
@@ -9,6 +9,10 @@ export function haversineKm(lat1: number, lng1: number, lat2: number, lng2: numb
   const dLng = toRad(lng2 - lng1);
   const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
   return 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+export function listingRating(vendor: Pick<Vendor, "ratingAvg" | "weightedRatingAvg">) {
+  return vendor.weightedRatingAvg || vendor.ratingAvg;
 }
 
 export function isOpenNow(hours: Hours, now = new Date()) {

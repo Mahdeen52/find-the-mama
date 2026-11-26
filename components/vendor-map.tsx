@@ -1,27 +1,58 @@
 "use client";
 
-import { MapContainer, Marker, Popup, TileLayer, useMapEvents } from "react-leaflet";
+import { useEffect } from "react";
+import { MapContainer, Marker, Popup, TileLayer, useMap, useMapEvents } from "react-leaflet";
 import L from "leaflet";
 import Link from "next/link";
+import { useTranslations } from "next-intl";
+import { Rating } from "@/components/ui";
 import { DHAKA_CENTER } from "@/lib/constants";
 import type { Vendor } from "@/lib/types";
+import { listingRating } from "@/lib/utils";
 
-const pin = L.divIcon({ className: "", html: '<div style="width:36px;height:36px;border-radius:18px 18px 18px 4px;transform:rotate(-45deg);background:#e85d04;border:3px solid white;box-shadow:0 5px 15px #0003;display:grid;place-items:center"><span style="transform:rotate(45deg);font-size:16px">🥣</span></div>', iconSize: [36, 36], iconAnchor: [18, 36] });
-const pickerPin = L.divIcon({ className: "", html: '<div style="width:32px;height:32px;border-radius:50%;background:#24705b;border:4px solid white;box-shadow:0 4px 14px #0004"></div>', iconSize: [32, 32], iconAnchor: [16, 16] });
+const pin = L.divIcon({ className: "", html: '<span class="vendor-map-pin" aria-hidden="true"></span>', iconSize: [26, 26], iconAnchor: [13, 26], popupAnchor: [0, -24] });
 
-function MapClick({ onChange }: { onChange: (lat: number, lng: number) => void }) {
-  useMapEvents({ click(event) { onChange(event.latlng.lat, event.latlng.lng); } });
+function MapViewport({ vendors, position, onChange }: {
+  vendors?: Vendor[]; position?: [number, number]; onChange?: (lat: number, lng: number) => void;
+}) {
+  const map = useMap();
+  const lat = position?.[0];
+  const lng = position?.[1];
+  useMapEvents({ click: (event) => onChange?.(event.latlng.lat, event.latlng.lng) });
+
+  useEffect(() => {
+    if (lat != null && lng != null) map.setView([lat, lng], map.getZoom());
+  }, [map, lat, lng]);
+
+  useEffect(() => {
+    if (vendors?.length) map.fitBounds(vendors.map((vendor) => [vendor.lat, vendor.lng]), { maxZoom: 15, padding: [26, 26] });
+  }, [map, vendors]);
+
   return null;
 }
 
-export function VendorMap({ vendors, className = "h-[460px]", picker, position, onPositionChange }: { vendors?: Vendor[]; className?: string; picker?: boolean; position?: [number, number]; onPositionChange?: (lat: number, lng: number) => void }) {
-  const center = position || (vendors?.[0] ? [vendors[0].lat, vendors[0].lng] as [number, number] : DHAKA_CENTER);
+export function VendorMap({ vendors, className = "h-[420px]", picker, position, onPositionChange }: {
+  vendors?: Vendor[]; className?: string; picker?: boolean; position?: [number, number]; onPositionChange?: (lat: number, lng: number) => void;
+}) {
+  const common = useTranslations("Common");
   return (
-    <MapContainer center={center} zoom={picker ? 13 : 12} scrollWheelZoom className={`${className} w-full rounded-3xl`}>
+    <MapContainer center={position ?? DHAKA_CENTER} zoom={picker ? 14 : 12} scrollWheelZoom={false} className={`${className} w-full rounded-xl border border-line`}>
       <TileLayer attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-      {picker && onPositionChange && <MapClick onChange={onPositionChange}/>} 
-      {picker && position && <Marker position={position} icon={pickerPin}/>} 
-      {vendors?.map((vendor) => <Marker key={vendor.id} position={[vendor.lat, vendor.lng]} icon={pin}><Popup><div className="min-w-44"><strong className="text-base">{vendor.name}</strong><p className="my-1 text-sm">{vendor.area} · ★ {(vendor.weightedRatingAvg ?? vendor.ratingAvg).toFixed(1)}</p><Link className="font-bold text-orange-700" href={`/vendor/${vendor.id}`}>View mama →</Link></div></Popup></Marker>)}
+      <MapViewport vendors={vendors} position={position} onChange={picker ? onPositionChange : undefined} />
+      {picker && position && <Marker position={position} icon={pin} alt={common("map")} />}
+      {vendors?.map((vendor) => {
+        const rating = listingRating(vendor);
+        return (
+          <Marker key={vendor.id} position={[vendor.lat, vendor.lng]} icon={pin} alt={vendor.name} title={vendor.name}>
+            <Popup><div className="min-w-32">
+              <Link className="text-link text-base" href={`/vendor/${vendor.id}`}>{vendor.name}</Link>
+              <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted">
+                {vendor.area}{vendor.ratingCount > 0 && <Rating value={rating} label={common("rating", { value: rating.toFixed(1) })} />}
+              </div>
+            </div></Popup>
+          </Marker>
+        );
+      })}
     </MapContainer>
   );
 }
