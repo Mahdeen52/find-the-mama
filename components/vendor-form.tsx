@@ -1,8 +1,9 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Check, CheckCircle2, ChevronLeft, ChevronRight, Clock3, ImagePlus, LocateFixed, MapPin, Store } from "lucide-react";
-import { useTranslations } from "next-intl";
+import { useQueryClient } from "@tanstack/react-query";
+import { Check, ChevronLeft, ChevronRight, LocateFixed, X } from "lucide-react";
+import { useFormatter, useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 import { useForm } from "react-hook-form";
@@ -11,32 +12,39 @@ import { z } from "zod";
 import { useAuth } from "@/components/auth-provider";
 import { DynamicVendorMap } from "@/components/map-dynamic";
 import { PhotoUploader } from "@/components/photo-uploader";
+import { SectionHeader } from "@/components/ui";
+import { VendorPhoto } from "@/components/vendor-photo";
 import { api } from "@/lib/api";
 import { AREA_CENTERS, AREAS, DEFAULT_HOURS, PRICE_RANGES, SPECIALTIES } from "@/lib/constants";
+import { POINT_RULES } from "@/lib/gamification";
 import type { Vendor } from "@/lib/types";
 import { vendorSchema } from "@/lib/validations";
 
 type Values = z.infer<typeof vendorSchema>;
+
 const days = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
-const stepFields: (keyof Values)[][] = [
-  ["name", "description"],
-  ["address", "area", "zone", "lat", "lng"],
-  ["operatingHours", "phone"],
-  ["specialties", "priceRange", "photoUrls"],
-  []
-];
+const steps = [
+  { key: "basic", hint: "stepHint1", fields: ["name", "description"] },
+  { key: "location", hint: "stepHint2", fields: ["address", "area", "zone", "lat", "lng"] },
+  { key: "hours", hint: "stepHint3", fields: ["operatingHours", "phone"] },
+  { key: "flavours", hint: "stepHint4", fields: ["specialties", "priceRange", "photoUrls"] },
+  { key: "review", hint: "stepHint5", fields: [] }
+] satisfies Array<{ key: string; hint: string; fields: (keyof Values)[] }>;
 
 export function VendorForm({ vendor }: { vendor?: Vendor }) {
   const t = useTranslations("Form");
   const common = useTranslations("Common");
+  const vendorText = useTranslations("Vendor");
+  const format = useFormatter();
   const router = useRouter();
+  const client = useQueryClient();
   const { refresh } = useAuth();
   const [step, setStep] = useState(0);
   const [stepError, setStepError] = useState("");
-  const formTop = useRef<HTMLDivElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const formTop = useRef<HTMLHeadingElement>(null);
   const form = useForm<Values>({
     resolver: zodResolver(vendorSchema),
-    mode: "onSubmit",
     defaultValues: vendor ? {
       name: vendor.name, description: vendor.description, address: vendor.address,
       area: vendor.area as Values["area"], zone: vendor.zone as Values["zone"], lat: vendor.lat, lng: vendor.lng,
@@ -44,57 +52,196 @@ export function VendorForm({ vendor }: { vendor?: Vendor }) {
       priceRange: vendor.priceRange, photoUrls: vendor.photos.map((photo) => photo.photoUrl)
     } : {
       name: "", description: "", address: "", area: "Dhanmondi", zone: "Dhanmondi",
-      lat: 23.7465, lng: 90.376, phone: "", specialties: ["Dahi Fuchka"],
+      lat: AREA_CENTERS.Dhanmondi[0], lng: AREA_CENTERS.Dhanmondi[1], phone: "", specialties: ["Dahi Fuchka"],
       operatingHours: DEFAULT_HOURS, priceRange: "BUDGET", photoUrls: []
     }
   });
   const values = form.watch();
-  const steps = [
-    { name: t("basic"), icon: Store }, { name: t("location"), icon: MapPin },
-    { name: t("hours"), icon: Clock3 }, { name: t("flavours"), icon: ImagePlus },
-    { name: t("review"), icon: CheckCircle2 }
-  ];
+  const { errors, isSubmitting } = form.formState;
+  const last = step === steps.length - 1;
 
-  const goTo = (target: number) => {
-    setStep(target); setStepError("");
-    requestAnimationFrame(() => formTop.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
-  };
-  const next = async () => {
-    const valid = await form.trigger(stepFields[step], { shouldFocus: true });
-    if (!valid) { setStepError(t("fixErrors")); toast.error(t("fixErrors")); return; }
-    goTo(Math.min(4, step + 1));
-  };
-  const useLocation = () => {
+  function goTo(target: number) {
+    setStep(target);
+    setStepError("");
+    requestAnimationFrame(() => formTop.current?.focus());
+  }
+
+  async function next() {
+    if (await form.trigger(steps[step].fields, { shouldFocus: true })) goTo(step + 1);
+    else setStepError(t("fixErrors"));
+  }
+
+  function setPosition(lat: number, lng: number) {
+    form.setValue("lat", lat, { shouldValidate: true });
+    form.setValue("lng", lng, { shouldValidate: true });
+  }
+
+  function useLocation() {
     if (!navigator.geolocation) { toast.error(t("locationUnavailable")); return; }
     navigator.geolocation.getCurrentPosition(({ coords }) => {
-      form.setValue("lat", coords.latitude, { shouldValidate: true });
-      form.setValue("lng", coords.longitude, { shouldValidate: true });
+      setPosition(coords.latitude, coords.longitude);
       toast.success(t("locationAdded"));
     }, () => toast.error(t("locationUnavailable")), { enableHighAccuracy: true, timeout: 10_000 });
-  };
+  }
+
   const submit = form.handleSubmit(async (data) => {
+    setStepError("");
     try {
-      const result = await api<Vendor>(vendor ? `/api/vendors/${vendor.id}` : "/api/vendors", { method: vendor ? "PUT" : "POST", body: JSON.stringify(data) });
-      await refresh();
+      const result = await api<Vendor>(vendor ? `/api/vendors/${vendor.id}` : "/api/vendors", {
+        method: vendor ? "PUT" : "POST", body: JSON.stringify(data)
+      });
+      void refresh();
+      void client.invalidateQueries({ queryKey: ["vendor", result.id] });
+      void client.invalidateQueries({ queryKey: ["vendors"] });
+      void client.invalidateQueries({ queryKey: ["search"] });
       toast.success(vendor ? t("success") : t("successPoints"));
       router.push(`/vendor/${result.id}`);
-    } catch (error) { toast.error(error instanceof Error ? error.message : common("error")); }
-  }, () => { setStepError(t("fixErrors")); toast.error(t("fixErrors")); });
+    } catch (error) {
+      setStepError(error instanceof Error ? error.message : common("error"));
+    }
+  }, () => setStepError(t("fixErrors")));
 
-  return <div className="container-page py-10 sm:py-14"><div className="mx-auto max-w-5xl" ref={formTop}>
-    <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"><div><div className="mb-3 inline-flex rounded-full bg-orange-100 px-3 py-1 text-xs font-black uppercase tracking-wider text-saffron-700">+20 community points</div><h1 className="text-4xl font-black sm:text-5xl">{vendor ? t("editTitle") : t("addTitle")}</h1><p className="mt-3 text-stone-600">{t("subtitle")}</p></div><p className="text-sm font-bold text-stone-500">{t("stepOf", { current: step + 1, total: steps.length })}</p></div>
-    <ol className="mb-7 grid grid-cols-5 gap-2" aria-label="Listing progress">{steps.map((item, index) => <li key={item.name}><button type="button" disabled={index > step} onClick={() => index < step && goTo(index)} className={`w-full rounded-2xl p-3 text-center text-xs font-bold transition sm:text-sm ${index === step ? "bg-saffron-600 text-white shadow-sm" : index < step ? "bg-ink text-white" : "bg-white text-stone-400"}`} aria-current={index === step ? "step" : undefined}><item.icon className="mx-auto mb-1" size={19}/><span className="hidden sm:inline">{item.name}</span></button></li>)}</ol>
-    <form onSubmit={submit} noValidate className="card overflow-hidden">
-      <div className="border-b border-orange-100 bg-orange-50/70 px-6 py-4 sm:px-9"><h2 className="text-xl font-black">{steps[step].name}</h2><p className="mt-1 text-sm text-stone-500">{t(`stepHint${step + 1}`)}</p></div>
-      <div className="p-6 sm:p-9">
-        {stepError && <div role="alert" className="mb-6 rounded-2xl border border-red-200 bg-red-50 p-4 font-bold text-red-700">{stepError}</div>}
-        {step === 0 && <div className="space-y-5"><label><span className="label">{t("name")}</span><input className="field" {...form.register("name")}/><p className="mt-1 text-sm text-red-600">{form.formState.errors.name?.message}</p></label><label><span className="label">{t("description")}</span><textarea rows={6} className="field" {...form.register("description")}/><p className="mt-1 text-sm text-red-600">{form.formState.errors.description?.message}</p></label></div>}
-        {step === 1 && <div className="space-y-5"><div className="flex items-center justify-between gap-3"><div><span className="label">{t("location")}</span><p className="text-sm text-stone-500">{t("mapHint")}</p></div><button type="button" onClick={useLocation} className="btn-secondary !px-4"><LocateFixed size={18}/><span className="hidden sm:inline">{t("useLocation")}</span></button></div><DynamicVendorMap picker position={[values.lat, values.lng]} onPositionChange={(lat, lng) => { form.setValue("lat", lat, { shouldValidate: true }); form.setValue("lng", lng, { shouldValidate: true }); }}/><label><span className="label">{t("address")}</span><input className="field" {...form.register("address")}/><p className="mt-1 text-sm text-red-600">{form.formState.errors.address?.message}</p></label><div className="grid gap-4 sm:grid-cols-2"><label><span className="label">{t("area")}</span><select className="field" {...form.register("area")} onChange={(event) => { const selected = event.target.value as Values["area"]; form.setValue("area", selected); form.setValue("zone", selected); if (!vendor) { const center = AREA_CENTERS[selected]; form.setValue("lat", center[0]); form.setValue("lng", center[1]); } }}>{AREAS.map((area) => <option key={area}>{area}</option>)}</select></label><div><span className="label">Coordinates</span><div className="field text-sm text-stone-500">{values.lat.toFixed(5)}, {values.lng.toFixed(5)}</div></div></div></div>}
-        {step === 2 && <div className="space-y-5"><div className="space-y-3">{days.map((day) => { const closed = values.operatingHours[day]?.closed; return <div key={day} className="grid gap-3 rounded-2xl bg-orange-50 p-3 sm:grid-cols-[70px_1fr_1fr_auto] sm:items-center"><strong className="capitalize">{day}</strong><input aria-label={`${day} opening time`} type="time" readOnly={closed} className="field !min-h-10 !p-2 read-only:opacity-40" {...form.register(`operatingHours.${day}.open`)}/><input aria-label={`${day} closing time`} type="time" readOnly={closed} className="field !min-h-10 !p-2 read-only:opacity-40" {...form.register(`operatingHours.${day}.close`)}/><label className="flex items-center gap-2 text-sm font-bold"><input type="checkbox" className="accent-orange-600" {...form.register(`operatingHours.${day}.closed`)}/>{t("closed")}</label></div>; })}</div><label><span className="label">{t("phone")}</span><input className="field" {...form.register("phone")}/></label></div>}
-        {step === 3 && <div className="space-y-7"><div><span className="label">{t("flavours")}</span><div className="grid gap-3 sm:grid-cols-2">{SPECIALTIES.map((item) => <label key={item} className={`flex cursor-pointer items-center gap-3 rounded-2xl border p-4 transition ${values.specialties.includes(item) ? "border-orange-400 bg-orange-50" : "border-orange-100 hover:border-orange-300"}`}><input type="checkbox" checked={values.specialties.includes(item)} onChange={() => form.setValue("specialties", values.specialties.includes(item) ? values.specialties.filter((value) => value !== item) : [...values.specialties, item], { shouldValidate: true })} className="accent-orange-600"/>{item}</label>)}</div><p className="mt-1 text-sm text-red-600">{form.formState.errors.specialties?.message}</p></div><label><span className="label">{t("price")}</span><select className="field" {...form.register("priceRange")}>{PRICE_RANGES.map((item, index) => <option key={item} value={item}>{"৳".repeat(index + 1)} · {item}</option>)}</select></label><div><span className="label">{t("photos")} ({values.photoUrls.length}/5)</span><p className="mb-3 text-sm text-stone-500">{t("photoHint")}</p><div className="grid grid-cols-2 gap-3 sm:grid-cols-3">{values.photoUrls.map((url, index) => <button aria-label="Remove photo" type="button" onClick={() => form.setValue("photoUrls", values.photoUrls.filter((_, itemIndex) => itemIndex !== index))} key={`${url}-${index}`} className="group relative aspect-video overflow-hidden rounded-2xl bg-orange-100"><img src={url} alt="Upload preview" className="h-full w-full object-cover"/><span className="absolute inset-x-2 bottom-2 rounded-full bg-ink/80 px-2 py-1 text-xs font-bold text-white opacity-0 transition group-hover:opacity-100">Remove</span></button>)}{values.photoUrls.length < 5 && <PhotoUploader onUploaded={(url) => form.setValue("photoUrls", [...values.photoUrls, url])} label={t("upload")}/>}</div></div></div>}
-        {step === 4 && <div><div className="rounded-3xl border border-orange-100 bg-orange-50/50 p-5 sm:p-7"><div className="flex items-center justify-between gap-4"><div><p className="text-sm font-bold uppercase tracking-wider text-saffron-700">{t("ready")}</p><h3 className="mt-1 text-2xl font-black">{values.name}</h3><p className="mt-1 text-stone-600">{values.address}, {values.area}</p></div><div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-leaf text-white"><Check size={24}/></div></div><dl className="mt-6 grid gap-3 sm:grid-cols-2"><div className="rounded-2xl bg-white p-4"><dt className="text-xs font-bold uppercase tracking-wider text-stone-500">{t("price")}</dt><dd className="mt-1 font-black">{values.priceRange}</dd></div><div className="rounded-2xl bg-white p-4"><dt className="text-xs font-bold uppercase tracking-wider text-stone-500">{t("photos")}</dt><dd className="mt-1 font-black">{values.photoUrls.length} attached</dd></div><div className="rounded-2xl bg-white p-4 sm:col-span-2"><dt className="text-xs font-bold uppercase tracking-wider text-stone-500">{t("flavours")}</dt><dd className="mt-2 flex flex-wrap gap-2">{values.specialties.map((item) => <span className="chip" key={item}>{item}</span>)}</dd></div></dl></div><p className="mt-5 text-sm text-stone-500">{t("publishNote")}</p></div>}
+  const errorProps = (field: keyof Values) => ({
+    "aria-invalid": Boolean(errors[field]),
+    "aria-describedby": errors[field]?.message ? `listing-${field}-error` : undefined
+  });
+
+  function fieldError(field: keyof Values) {
+    const message = errors[field]?.message;
+    return typeof message === "string" && <span id={`listing-${field}-error`} className="field-error">{message}</span>;
+  }
+
+  return (
+    <div className="page-section">
+      <div className="mx-auto max-w-3xl">
+        <SectionHeader page title={t(vendor ? "editTitle" : "addTitle")} description={t("subtitle")}
+          action={!vendor && <span className="chip chip-brand">+{common("points", { count: POINT_RULES.add_vendor })}</span>}
+        />
+        <ol className="mb-6 mt-6 grid grid-cols-5 gap-2" aria-label={t("stepOf", { current: step + 1, total: steps.length })}>
+          {steps.map((item, index) => (
+            <li key={item.key}>
+              <button
+                type="button" disabled={index > step || uploading || isSubmitting} onClick={() => index < step && goTo(index)} aria-current={index === step ? "step" : undefined}
+                aria-label={t(item.key)} className={`flex min-h-11 w-full flex-col items-center justify-center gap-1 rounded-lg border px-2 py-2 text-xs font-semibold ${index === step ? "border-brand-100 bg-brand-50 text-brand-700" : "border-line bg-white text-muted enabled:hover:border-brand-100"}`}
+              >
+                {index < step ? <Check size={17} aria-hidden="true" /> : <span aria-hidden="true">{format.number(index + 1)}</span>}
+                <span className="hidden sm:inline">{t(item.key)}</span>
+              </button>
+            </li>
+          ))}
+        </ol>
+        <form noValidate className="card" onSubmit={(event) => {
+          if (last) void submit(event);
+          else { event.preventDefault(); if (!uploading) void next(); }
+        }} aria-busy={isSubmitting}>
+          <div className="border-b border-line px-4 py-4 sm:px-6">
+            <p className="text-xs font-semibold text-muted">{t("stepOf", { current: step + 1, total: steps.length })}</p>
+            <h2 tabIndex={-1} ref={formTop} className="card-title mt-1">{t(steps[step].key)}</h2>
+            <p className="mt-1 text-sm text-muted">{t(vendor && last ? "editNote" : steps[step].hint)}</p>
+          </div>
+          <div className="p-4 sm:p-6">
+            {stepError && <p role="alert" className="mb-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">{stepError}</p>}
+
+            {step === 0 && <div className="space-y-4">
+              <label className="block"><span className="label">{t("name")}</span><input className="field" {...errorProps("name")} {...form.register("name")} />{fieldError("name")}</label>
+              <label className="block"><span className="label">{t("description")}</span><textarea rows={5} className="field" {...errorProps("description")} {...form.register("description")} />{fieldError("description")}</label>
+            </div>}
+
+            {step === 1 && <div className="space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <p className="text-sm text-muted">{t("mapHint")}</p>
+                <button type="button" className="btn-secondary" onClick={useLocation}><LocateFixed size={17} aria-hidden="true" />{t("useLocation")}</button>
+              </div>
+              <DynamicVendorMap picker className="h-64 sm:h-80" position={Number.isFinite(values.lat) && Number.isFinite(values.lng) && Math.abs(values.lat) <= 90 && Math.abs(values.lng) <= 180 ? [values.lat, values.lng] : undefined} onPositionChange={setPosition} />
+              <label className="block"><span className="label">{t("address")}</span><input className="field" {...errorProps("address")} {...form.register("address")} />{fieldError("address")}</label>
+              <label className="block"><span className="label">{t("area")}</span>
+                <select className="field" {...form.register("area")} onChange={(event) => {
+                  const selected = event.target.value as Values["area"];
+                  form.setValue("area", selected);
+                  form.setValue("zone", selected);
+                  if (!vendor) setPosition(...AREA_CENTERS[selected]);
+                }}>{AREAS.map((area) => <option key={area}>{area}</option>)}</select>
+              </label>
+              <fieldset className="grid grid-cols-2 gap-3">
+                <legend className="sr-only">{t("coordinates")}</legend>
+                <label><span className="label">{t("latitude")}</span><input className="field" type="number" step="any" {...errorProps("lat")} {...form.register("lat", { valueAsNumber: true })} />{fieldError("lat")}</label>
+                <label><span className="label">{t("longitude")}</span><input className="field" type="number" step="any" {...errorProps("lng")} {...form.register("lng", { valueAsNumber: true })} />{fieldError("lng")}</label>
+              </fieldset>
+            </div>}
+
+            {step === 2 && <div className="space-y-4">
+              {days.map((day, index) => {
+                const weekday = format.dateTime(new Date(Date.UTC(2024, 0, 7 + index)), { weekday: "long", timeZone: "UTC" });
+                const closed = values.operatingHours[day]?.closed;
+                return (
+                  <fieldset key={day} className="rounded-lg border border-line p-3">
+                    <legend className="px-1 text-sm font-semibold">{weekday}</legend>
+                    <div className="grid grid-cols-2 items-end gap-2 sm:grid-cols-[1fr_1fr_auto]">
+                      <label><span className="label">{t("opens")}</span><input type="time" readOnly={closed} className="field px-2 read-only:bg-surface" {...form.register(`operatingHours.${day}.open`)} /></label>
+                      <label><span className="label">{t("closes")}</span><input type="time" readOnly={closed} className="field px-2 read-only:bg-surface" {...form.register(`operatingHours.${day}.close`)} /></label>
+                      <label className="col-span-2 flex min-h-11 items-center gap-2 text-sm font-semibold sm:col-auto sm:px-2"><input type="checkbox" className="h-4 w-4" {...form.register(`operatingHours.${day}.closed`)} />{t("closed")}</label>
+                    </div>
+                  </fieldset>
+                );
+              })}
+              <label className="block"><span className="label">{t("phone")}</span><input type="tel" className="field" {...form.register("phone")} /></label>
+            </div>}
+
+            {step === 3 && <div className="space-y-6">
+              <fieldset {...errorProps("specialties")}>
+                <legend className="label">{vendorText("specialties")}</legend>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {SPECIALTIES.map((item) => (
+                    <label key={item} className="flex min-h-11 cursor-pointer items-center gap-2 rounded-lg border border-line px-3 text-sm has-[:checked]:border-brand-100 has-[:checked]:bg-brand-50">
+                      <input type="checkbox" className="h-4 w-4" checked={values.specialties.includes(item)} onChange={() => form.setValue("specialties", values.specialties.includes(item) ? values.specialties.filter((value) => value !== item) : [...values.specialties, item], { shouldValidate: true })} />{item}
+                    </label>
+                  ))}
+                </div>
+                {fieldError("specialties")}
+              </fieldset>
+              <label className="block"><span className="label">{t("price")}</span><select className="field" {...form.register("priceRange")}>{PRICE_RANGES.map((item) => <option key={item} value={item}>{common(item.toLowerCase() as "budget" | "moderate" | "premium")}</option>)}</select></label>
+              <div>
+                <h3 className="label">{t("photos")} ({format.number(values.photoUrls.length)}/5)</h3>
+                <p className="mb-3 text-sm text-muted">{t("photoHint")}</p>
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                  {values.photoUrls.map((url, index) => (
+                    <div key={`${url}-${index}`} className="relative aspect-[16/10] overflow-hidden rounded-lg bg-surface">
+                      <VendorPhoto src={url} alt={vendorText("photo", { current: index + 1, total: values.photoUrls.length })} sizes="220px" />
+                      <button type="button" className="btn-secondary absolute right-2 top-2 h-11 w-11 px-0" aria-label={t("removePhoto", { count: index + 1 })} onClick={() => form.setValue("photoUrls", form.getValues("photoUrls").filter((_, position) => position !== index))}><X size={18} aria-hidden="true" /></button>
+                    </div>
+                  ))}
+                  {values.photoUrls.length < 5 && <PhotoUploader label={t("upload")} onBusyChange={setUploading} onUploaded={(url) => {
+                    form.setValue("photoUrls", [...form.getValues("photoUrls"), url]);
+                    toast.success(vendorText("photoReady"));
+                  }} />}
+                </div>
+                {fieldError("photoUrls")}
+              </div>
+            </div>}
+
+            {last && <div>
+              <section className="rounded-lg border border-line bg-canvas p-4">
+                <h3 className="card-title break-words">{values.name}</h3>
+                <p className="mt-1 break-words text-sm text-muted">{values.address}, {values.area}</p>
+                <p className="mt-3 whitespace-pre-line break-words text-sm">{values.description}</p>
+                <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                  <div><dt className="text-muted">{t("price")}</dt><dd className="font-semibold">{common(values.priceRange.toLowerCase() as "budget" | "moderate" | "premium")}</dd></div>
+                  <div><dt className="text-muted">{t("photos")}</dt><dd className="font-semibold">{t("attached", { count: values.photoUrls.length })}</dd></div>
+                </dl>
+                <div className="mt-4 flex flex-wrap gap-2">{values.specialties.map((item) => <span className="chip" key={item}>{item}</span>)}</div>
+              </section>
+              {!vendor && <p className="mt-4 text-sm text-muted">{t("publishNote")}</p>}
+            </div>}
+          </div>
+          <div className="flex flex-wrap justify-between gap-3 border-t border-line px-4 py-4 sm:px-6">
+            <button type="button" className="btn-secondary" disabled={step === 0 || uploading || isSubmitting} onClick={() => goTo(step - 1)}><ChevronLeft size={17} aria-hidden="true" />{common("back")}</button>
+            <button type="submit" className="btn-primary" disabled={uploading || isSubmitting}>
+              {last ? t(isSubmitting ? "saving" : vendor ? "update" : "publish") : common("next")}
+              {last ? <Check size={16} aria-hidden="true" /> : <ChevronRight size={17} aria-hidden="true" />}
+            </button>
+          </div>
+        </form>
       </div>
-      <div className="flex justify-between border-t border-orange-100 bg-stone-50/60 px-6 py-5 sm:px-9"><button type="button" onClick={() => goTo(Math.max(0, step - 1))} disabled={step === 0} className="btn-secondary"><ChevronLeft size={18}/>{common("back")}</button>{step < 4 ? <button type="button" onClick={next} className="btn-primary">{common("next")}<ChevronRight size={18}/></button> : <button type="submit" disabled={form.formState.isSubmitting} className="btn-primary"><Check size={18}/>{vendor ? t("update") : t("publish")}</button>}</div>
-    </form>
-  </div></div>;
+    </div>
+  );
 }

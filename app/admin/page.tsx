@@ -1,4 +1,164 @@
 "use client";
-import { useQuery, useQueryClient } from "@tanstack/react-query"; import { Flag, MessageSquare, ShieldCheck, Store, Users } from "lucide-react"; import { api } from "@/lib/api"; import { ActionButton } from "@/components/admin/action-button"; import { TrustBadge } from "@/components/admin/badges";
-type Stats = { vendors: number; levels: Record<string, number>; users: number; trustedUsers: number; reviews7: number; reviews30: number; openReports: number; fake30: number; byArea: { label: string; count: number }[]; byZone: { label: string; count: number }[]; activity: { id: string; action: string; entityType: string; createdAt: string; user: { name: string | null } }[]; contributors: { id: string; name: string | null; contributionPoints: number; trustScore: number; isTrustedContributor: boolean }[] };
-export default function AdminDashboard() { const client = useQueryClient(); const query = useQuery({ queryKey: ["admin-stats"], queryFn: () => api<Stats>("/api/admin/stats") }); const d = query.data; const refresh = () => client.invalidateQueries({ queryKey: ["admin-stats"] }); const cards = [[Store, "Vendors", d?.vendors, `L0 ${d?.levels[0] || 0} · L1 ${d?.levels[1] || 0} · L2 ${d?.levels[2] || 0} · L3 ${d?.levels[3] || 0}`], [Users, "Users", d?.users, `${d?.trustedUsers || 0} trusted`], [MessageSquare, "Reviews", d?.reviews30, `${d?.reviews7 || 0} in 7 days`], [Flag, "Open reports", d?.openReports, `${d?.fake30 || 0} fake removed / 30d`]] as const; return <div><h1 className="text-4xl font-black">Operations dashboard</h1><p className="mt-2 text-stone-600">Trust, verification, moderation and community health at a glance.</p><div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">{cards.map(([Icon, label, value, meta]) => <div className="card p-5" key={label}><Icon className="text-saffron-600"/><p className="mt-4 text-3xl font-black">{value ?? "—"}</p><p className="font-bold">{label}</p><p className="mt-1 text-xs text-stone-500">{meta}</p></div>)}</div><section className="card mt-6 p-5"><h2 className="flex items-center gap-2 text-xl font-black"><ShieldCheck/> Quick actions</h2><div className="mt-4 flex flex-wrap gap-3"><ActionButton url="/api/admin/settings/recompute-weighted-ratings" label="Recompute ratings" onDone={refresh}/><ActionButton url="/api/admin/settings/auto-level1" label="Run auto-verification" onDone={refresh}/><ActionButton url="/api/admin/settings/recalc-trust" label="Recalculate trust" onDone={refresh}/></div></section><div className="mt-6 grid gap-6 xl:grid-cols-2"><section className="card p-5"><h2 className="text-xl font-black">Vendors by area</h2><div className="mt-4 space-y-3">{d?.byArea.map((row) => <div key={row.label}><div className="flex justify-between text-sm"><span>{row.label}</span><b>{row.count}</b></div><div className="mt-1 h-2 rounded bg-orange-50"><div className="h-2 rounded bg-saffron-500" style={{ width: `${Math.max(5, row.count / Math.max(1, d.vendors) * 100)}%` }}/></div></div>)}</div></section><section className="card p-5"><h2 className="text-xl font-black">Top contributors</h2><div className="mt-4 divide-y divide-orange-100">{d?.contributors.map((user) => <div className="flex items-center justify-between py-3" key={user.id}><div><p className="font-bold">{user.name || "Unnamed user"}</p><p className="text-xs text-stone-500">{user.contributionPoints} contribution points</p></div><TrustBadge trusted={user.isTrustedContributor} score={user.trustScore}/></div>)}</div></section><section className="card p-5 xl:col-span-2"><h2 className="text-xl font-black">Recent activity</h2><div className="mt-4 divide-y divide-orange-100">{d?.activity.map((item) => <div className="flex justify-between gap-4 py-3 text-sm" key={item.id}><span><b>{item.user.name || "System"}</b> · {item.action.replaceAll("_", " ")}</span><time className="text-stone-500">{new Date(item.createdAt).toLocaleString()}</time></div>)}</div></section></div></div>; }
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Flag, MessageSquare, ShieldCheck, Store, Users } from "lucide-react";
+import { AdminResults } from "@/components/admin/admin-results";
+import { api } from "@/lib/api";
+import { ActionButton } from "@/components/admin/action-button";
+import { TrustBadge } from "@/components/admin/badges";
+type Stats = {
+  vendors: number;
+  levels: Record<string, number>;
+  users: number;
+  trustedUsers: number;
+  reviews7: number;
+  reviews30: number;
+  openReports: number;
+  fake30: number;
+  byArea: { label: string; count: number }[];
+  byZone: { label: string; count: number }[];
+  activity: {
+    id: string;
+    action: string;
+    entityType: string;
+    createdAt: string;
+    user: { name: string | null };
+  }[];
+  contributors: {
+    id: string;
+    name: string | null;
+    contributionPoints: number;
+    trustScore: number;
+    isTrustedContributor: boolean;
+  }[];
+};
+export default function AdminDashboard() {
+  const client = useQueryClient();
+  const query = useQuery({
+    queryKey: ["admin-stats"],
+    queryFn: () => api<Stats>("/api/admin/stats"),
+  });
+  const d = query.data;
+  const refresh = () => client.invalidateQueries({ queryKey: ["admin-stats"] });
+  const cards = [
+    [
+      Store,
+      "Vendors",
+      d?.vendors,
+      `L0 ${d?.levels[0] || 0} · L1 ${d?.levels[1] || 0} · L2 ${d?.levels[2] || 0} · L3 ${d?.levels[3] || 0}`,
+    ],
+    [Users, "Users", d?.users, `${d?.trustedUsers || 0} trusted`],
+    [MessageSquare, "Reviews", d?.reviews30, `${d?.reviews7 || 0} in 7 days`],
+    [
+      Flag,
+      "Open reports",
+      d?.openReports,
+      `${d?.fake30 || 0} fake removed / 30d`,
+    ],
+  ] as const;
+  return (
+    <div>
+      <h1 className="page-title break-words">Operations dashboard</h1>
+      <p className="mt-2 text-muted">
+        Trust, verification, moderation and community health at a glance.
+      </p>
+      <AdminResults query={query}>
+        <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          {cards.map(([Icon, label, value, meta]) => (
+            <div className="card p-5" key={label}>
+              <Icon className="text-brand-700" />
+              <p className="mt-4 text-3xl font-bold">{value ?? "—"}</p>
+              <p className="font-bold">{label}</p>
+              <p className="mt-1 text-xs text-muted">{meta}</p>
+            </div>
+          ))}
+        </div>
+        <section className="card mt-6 p-5">
+          <h2 className="flex items-center gap-2 card-title">
+            <ShieldCheck /> Quick actions
+          </h2>
+          <div className="mt-4 flex flex-wrap gap-3">
+            <ActionButton
+              url="/api/admin/settings/recompute-weighted-ratings"
+              label="Recompute ratings"
+              onDone={refresh}
+            />
+            <ActionButton
+              url="/api/admin/settings/auto-level1"
+              label="Run auto-verification"
+              onDone={refresh}
+            />
+            <ActionButton
+              url="/api/admin/settings/recalc-trust"
+              label="Recalculate trust"
+              onDone={refresh}
+            />
+          </div>
+        </section>
+        <div className="mt-6 grid gap-6 xl:grid-cols-2">
+          <section className="card p-5">
+            <h2 className="card-title">Vendors by area</h2>
+            <div className="mt-4 space-y-3">
+              {d?.byArea.map((row) => (
+                <div key={row.label}>
+                  <div className="flex justify-between text-sm">
+                    <span>{row.label}</span>
+                    <b>{row.count}</b>
+                  </div>
+                  <div className="mt-1 h-2 rounded bg-surface">
+                    <div
+                      className="h-2 rounded bg-brand-600"
+                      style={{
+                        width: `${Math.max(5, (row.count / Math.max(1, d.vendors)) * 100)}%`,
+                      }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+          <section className="card p-5">
+            <h2 className="card-title">Top contributors</h2>
+            <div className="mt-4 divide-y divide-line">
+              {d?.contributors.map((user) => (
+                <div
+                  className="flex items-center justify-between py-3"
+                  key={user.id}
+                >
+                  <div>
+                    <p className="font-bold">{user.name || "Unnamed user"}</p>
+                    <p className="text-xs text-muted">
+                      {user.contributionPoints} contribution points
+                    </p>
+                  </div>
+                  <TrustBadge
+                    trusted={user.isTrustedContributor}
+                    score={user.trustScore}
+                  />
+                </div>
+              ))}
+            </div>
+          </section>
+          <section className="card p-5 xl:col-span-2">
+            <h2 className="card-title">Recent activity</h2>
+            <div className="mt-4 divide-y divide-line">
+              {d?.activity.map((item) => (
+                <div
+                  className="flex justify-between gap-4 py-3 text-sm"
+                  key={item.id}
+                >
+                  <span>
+                    <b>{item.user.name || "System"}</b> ·{" "}
+                    {item.action.replaceAll("_", " ")}
+                  </span>
+                  <time className="text-muted">
+                    {new Date(item.createdAt).toLocaleString()}
+                  </time>
+                </div>
+              ))}
+            </div>
+          </section>
+        </div>
+      </AdminResults>
+    </div>
+  );
+}

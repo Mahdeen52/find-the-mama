@@ -1,5 +1,46 @@
 import { clsx } from "clsx";
-const levelNames = ["L0 Unverified", "L1 Community", "L2 Moderator", "L3 Claimed"];
-export function VerificationBadge({ level }: { level: number }) { return <span className={clsx("inline-flex rounded-full px-2.5 py-1 text-xs font-black", level === 0 && "bg-stone-100 text-stone-700", level === 1 && "bg-blue-100 text-blue-700", level === 2 && "bg-emerald-100 text-emerald-700", level === 3 && "bg-purple-100 text-purple-700")}>{levelNames[level] || `L${level}`}</span>; }
-export function StatusBadge({ value }: { value: string }) { return <span className={clsx("inline-flex rounded-full px-2.5 py-1 text-xs font-black", ["ACTIVE", "RESOLVED"].includes(value) ? "bg-emerald-100 text-emerald-700" : ["OPEN", "PENDING", "REVIEWING"].includes(value) ? "bg-amber-100 text-amber-800" : "bg-red-100 text-red-700")}>{value}</span>; }
-export function TrustBadge({ trusted, score }: { trusted: boolean; score: number }) { return <span className={clsx("inline-flex rounded-full px-2.5 py-1 text-xs font-black", trusted ? "bg-emerald-100 text-emerald-700" : "bg-stone-100 text-stone-600")}>{trusted ? "Trusted" : "Standard"} · {score}</span>; }
+
+const levelNames = [
+  "L0 Unverified",
+  "L1 Community",
+  "L2 Moderator",
+  "L3 Claimed",
+];
+
+export function VerificationBadge({ level }: { level: number }) {
+  return (
+    <span className={clsx("chip", level >= 2 && "chip-brand")}>
+      {levelNames[level] || `L${level}`}
+    </span>
+  );
+}
+
+export function StatusBadge({ value }: { value: string }) {
+  const color = ["ACTIVE", "RESOLVED"].includes(value)
+    ? "bg-emerald-700"
+    : ["OPEN", "PENDING", "REVIEWING"].includes(value)
+      ? "bg-amber-700"
+      : ["BANNED", "REJECTED", "SUSPENDED"].includes(value)
+        ? "bg-red-700"
+        : "bg-stone-500";
+  return (
+    <span className="chip">
+      <span className={`h-2 w-2 rounded-full ${color}`} aria-hidden="true" />
+      <span className="capitalize">{value.toLowerCase()}</span>
+    </span>
+  );
+}
+
+export function TrustBadge({
+  trusted,
+  score,
+}: {
+  trusted: boolean;
+  score: number;
+}) {
+  return (
+    <span className={clsx("chip", trusted && "chip-brand")}>
+      {trusted ? "Trusted" : "Standard"} · {score}
+    </span>
+  );
+}

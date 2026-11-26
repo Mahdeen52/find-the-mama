@@ -1,2 +1,10 @@
+"use client";
+
 import Link from "next/link";
-export default function NotFound() { return <div className="container-page grid min-h-[60vh] place-items-center text-center"><div><p className="text-7xl">🥣</p><h1 className="mt-4 text-4xl font-black">Mama not found</h1><p className="mt-2 text-stone-600">This cart may have moved to a new corner.</p><Link className="btn-primary mt-6" href="/">Back home</Link></div></div>; }
+import { useTranslations } from "next-intl";
+import { StatePanel } from "@/components/ui";
+
+export default function NotFound() {
+  const t = useTranslations("Common");
+  return <div className="page-section"><StatePanel page title={t("notFound")} description={t("notFoundDescription")} action={<Link href="/" className="btn-primary">{t("home")}</Link>} /></div>;
+}

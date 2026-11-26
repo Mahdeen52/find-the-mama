@@ -1,12 +1,28 @@
 "use client";
 
-import Image from "next/image";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { useState } from "react";
+import { VendorPhoto } from "@/components/vendor-photo";
 import type { Photo } from "@/lib/types";
 
 export function VendorGallery({ photos, name }: { photos: Photo[]; name: string }) {
+  const t = useTranslations("Vendor");
   const [index, setIndex] = useState(0);
-  if (!photos.length) return <div className="grid aspect-[16/8] place-items-center rounded-4xl bg-orange-100 text-7xl">🥣</div>;
-  return <div className="relative aspect-[16/9] overflow-hidden rounded-4xl bg-orange-100 sm:aspect-[16/7]"><Image src={photos[index].photoUrl} alt={photos[index].caption || name} fill priority className="object-cover" sizes="100vw"/><div className="absolute inset-0 bg-gradient-to-t from-black/45 via-transparent to-transparent"/>{photos.length > 1 && <><button onClick={() => setIndex((index - 1 + photos.length) % photos.length)} className="absolute left-4 top-1/2 grid h-11 w-11 -translate-y-1/2 place-items-center rounded-full bg-white/90"><ChevronLeft/></button><button onClick={() => setIndex((index + 1) % photos.length)} className="absolute right-4 top-1/2 grid h-11 w-11 -translate-y-1/2 place-items-center rounded-full bg-white/90"><ChevronRight/></button><span className="absolute bottom-4 right-4 rounded-full bg-black/60 px-3 py-1 text-sm text-white">{index + 1} / {photos.length}</span></>}</div>;
+  const current = photos.length ? index % photos.length : 0;
+  const photo = photos[current];
+  const counter = t("photo", { current: current + 1, total: photos.length });
+
+  return (
+    <div className="relative aspect-[16/10] overflow-hidden rounded-xl border border-line bg-surface sm:aspect-[16/9]" role="group" aria-label={t("photos")}>
+      <VendorPhoto src={photo?.photoUrl} alt={photo?.caption || name} sizes="(max-width: 1023px) 100vw, 64vw" priority={current === 0} />
+      {photos.length > 1 && (
+        <>
+          <button type="button" onClick={() => setIndex((current - 1 + photos.length) % photos.length)} className="btn-secondary absolute left-3 top-1/2 h-11 w-11 -translate-y-1/2 px-0" aria-label={t("previousPhoto")}><ChevronLeft aria-hidden="true" size={21} /></button>
+          <button type="button" onClick={() => setIndex((current + 1) % photos.length)} className="btn-secondary absolute right-3 top-1/2 h-11 w-11 -translate-y-1/2 px-0" aria-label={t("nextPhoto")}><ChevronRight aria-hidden="true" size={21} /></button>
+          <span className="chip absolute bottom-3 right-3 bg-white" aria-live="polite">{counter}</span>
+        </>
+      )}
+    </div>
+  );
 }

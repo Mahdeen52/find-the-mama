@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import "leaflet/dist/leaflet.css";
 import "./globals.css";
 import { Providers } from "@/app/providers";
 import { SiteChrome } from "@/components/site-chrome";

@@ -1,9 +1,9 @@
 import type { Prisma } from "@prisma/client";
 import { requireAuth } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { SPECIALTIES } from "@/lib/constants";
 import { fail, handleApiError, ok } from "@/lib/http";
-import { isOpenNow } from "@/lib/utils";
-import { haversineKm } from "@/lib/utils";
+import { haversineKm, isOpenNow, listingRating } from "@/lib/utils";
 import { queryDemoVendors } from "@/lib/demo-data";
 import { vendorSchema } from "@/lib/validations";
 import { serializeVendor } from "@/lib/vendor";
@@ -18,14 +18,37 @@ export async function GET(request: Request) {
     const offset = Math.max(Number(params.get("offset")) || 0, 0);
     const minRating = Number(params.get("minRating")) || undefined;
     const q = params.get("q")?.trim(); const area = params.get("area"); const priceRange = params.get("priceRange");
-    const where: Prisma.VendorWhereInput = { status: "ACTIVE", ...(area && { area }), ...(minRating && { weightedRatingAvg: { gte: minRating } }), ...(priceRange && ["BUDGET","MODERATE","PREMIUM"].includes(priceRange) && { priceRange: priceRange as "BUDGET"|"MODERATE"|"PREMIUM" }), ...(q && { OR: [{ name: { contains: q, mode: "insensitive" } }, { description: { contains: q, mode: "insensitive" } }, { area: { contains: q, mode: "insensitive" } }] }) };
+    const matchingSpecialties = q ? SPECIALTIES.filter((item) => item.toLowerCase().includes(q.toLowerCase())) : [];
+    const where: Prisma.VendorWhereInput = {
+      status: "ACTIVE",
+      ...(area && { area }),
+      ...(minRating && {
+        OR: [
+          { weightedRatingAvg: { gte: minRating } },
+          { weightedRatingAvg: 0, ratingAvg: { gte: minRating } }
+        ]
+      }),
+      ...(priceRange && ["BUDGET", "MODERATE", "PREMIUM"].includes(priceRange) && {
+        priceRange: priceRange as "BUDGET" | "MODERATE" | "PREMIUM"
+      }),
+      ...(q && {
+        AND: {
+          OR: [
+            { name: { contains: q, mode: "insensitive" } },
+            { description: { contains: q, mode: "insensitive" } },
+            { area: { contains: q, mode: "insensitive" } },
+            ...matchingSpecialties.map((item) => ({ specialties: { array_contains: [item] } }))
+          ]
+        }
+      })
+    };
     const sort = params.get("sort"); const lat = Number(params.get("lat")); const lng = Number(params.get("lng"));
     const hasCoords = params.has("lat") && params.has("lng") && Number.isFinite(lat) && Number.isFinite(lng);
     const rows = await db.vendor.findMany({ where, include: { photos: { where: { isHidden: false }, orderBy: [{ isPrimary: "desc" }, { createdAt: "desc" }], take: 3 } }, orderBy: sort === "recentlyAdded" ? { createdAt: "desc" } : { weightedRatingAvg: "desc" } });
     const specialties = params.get("specialties")?.split(",").filter(Boolean) || [];
     const filtered = rows.filter((row) => (!params.get("openNow") || isOpenNow(row.operatingHours as never)) && (!specialties.length || specialties.every((item) => (row.specialties as string[]).includes(item))));
     const serialized = filtered.map(serializeVendor).map((row) => ({ ...row, ...(hasCoords && { distance: haversineKm(lat, lng, row.lat, row.lng) }) }));
-    serialized.sort((a, b) => sort === "distance" && hasCoords ? (a.distance ?? 999) - (b.distance ?? 999) : sort === "area" ? a.area.localeCompare(b.area) || b.weightedRatingAvg - a.weightedRatingAvg : sort === "recentlyAdded" ? Date.parse(b.createdAt) - Date.parse(a.createdAt) : b.weightedRatingAvg - a.weightedRatingAvg);
+    serialized.sort((a, b) => sort === "distance" && hasCoords ? (a.distance ?? 999) - (b.distance ?? 999) : sort === "area" ? a.area.localeCompare(b.area) || listingRating(b) - listingRating(a) : sort === "recentlyAdded" ? Date.parse(b.createdAt) - Date.parse(a.createdAt) : listingRating(b) - listingRating(a));
     return ok(serialized.slice(offset, offset + limit));
   } catch (error) { console.warn("Database unavailable; serving demo vendors", error); return ok(queryDemoVendors(request.url)); }
 }

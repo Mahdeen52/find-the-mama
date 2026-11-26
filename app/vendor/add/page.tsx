@@ -1,6 +1,17 @@
 "use client";
-import { useEffect } from "react";
+
+import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
+import { useEffect } from "react";
 import { useAuth } from "@/components/auth-provider";
+import { Skeleton } from "@/components/ui";
 import { VendorForm } from "@/components/vendor-form";
-export default function AddVendorPage() { const { user, loading } = useAuth(); const router = useRouter(); useEffect(() => { if (!loading && !user) router.replace("/auth/login"); }, [loading, user, router]); if (loading || !user) return <div className="container-page py-20"><div className="h-80 animate-pulse rounded-3xl bg-orange-100"/></div>; return <VendorForm/>; }
+
+export default function AddVendorPage() {
+  const { user, loading } = useAuth();
+  const router = useRouter();
+  const t = useTranslations("Common");
+  useEffect(() => { if (!loading && !user) router.replace("/auth/login?next=/vendor/add"); }, [loading, user, router]);
+  if (loading || !user) return <div className="page-section"><Skeleton className="mx-auto h-80 max-w-3xl" label={t("loading")} /></div>;
+  return <VendorForm />;
+}
